@@ -6,7 +6,6 @@ import TopNav from "@/components/TopNav";
 import KPICards from "@/components/KPICards";
 import BulkUpload from "@/components/BulkUpload";
 import SubscriptionTable from "@/components/SubscriptionTable";
-import RevenueChart from "@/components/RevenueChart";
 import CustomersView from "@/components/CustomersView";
 import VehiclesView from "@/components/VehiclesView";
 import SubscriptionsView from "@/components/SubscriptionsView";
@@ -78,37 +77,6 @@ export default function DashboardPage() {
               {/* KPIs */}
               <KPICards />
 
-              {/* Chart + quick stats row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2">
-                  <RevenueChart />
-                </div>
-                {/* Quick overview panel */}
-                <div className="flex flex-col gap-3">
-                  <QuickStatCard
-                    label="Vehicles Synced"
-                    value="10 / 12"
-                    sub="83% Trakzee sync rate"
-                    color="text-blue-600"
-                    bg="bg-blue-50"
-                  />
-                  <QuickStatCard
-                    label="Overdue Accounts"
-                    value="3"
-                    sub="Immediate action required"
-                    color="text-red-500"
-                    bg="bg-red-50"
-                  />
-                  <QuickStatCard
-                    label="Renewals This Week"
-                    value="5"
-                    sub="Due within 7 days"
-                    color="text-amber-600"
-                    bg="bg-amber-50"
-                  />
-                </div>
-              </div>
-
               {/* Subscription table */}
               <SubscriptionTable />
             </div>
@@ -157,25 +125,6 @@ export default function DashboardPage() {
           </div>
           <span>© {now.getFullYear()} Office Data Group — All rights reserved</span>
         </footer>
-      </div>
-    </div>
-  );
-}
-
-// ── Helper component ─────────────────────────────────────────────────────────
-function QuickStatCard({
-  label, value, sub, color, bg,
-}: {
-  label: string; value: string; sub: string; color: string; bg: string;
-}) {
-  return (
-    <div className={`rounded-xl border border-border p-4 flex items-center gap-4 bg-card hover:shadow-sm transition-shadow`}>
-      <div className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
-        <span className={`text-base font-extrabold ${color}`}>{value.split(" ")[0]}</span>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-foreground">{label}</p>
-        <p className="text-[0.7rem] text-muted-foreground mt-0.5">{sub}</p>
       </div>
     </div>
   );
