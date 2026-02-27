@@ -1,6 +1,7 @@
 "use client";
 
 import { Users, Coins, ShieldCheck, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { kpiData } from "@/data/dummy";
 
 const kpis = [
@@ -8,144 +9,94 @@ const kpis = [
         label: "Total Active Customers",
         value: kpiData.totalActiveCustomers.toLocaleString(),
         change: "+12%",
+        suffix: "vs last month",
         trend: "up" as const,
-        icon: <Users size={22} />,
-        color: "#3B82F6",
-        bgColor: "#EFF6FF",
-        borderColor: "#3B82F6",
+        icon: Users,
+        color: "text-blue-500",
+        bg: "bg-blue-50",
+        accent: "#3B82F6",
     },
     {
-        label: "Total Monthly Revenue",
+        label: "Monthly Revenue",
         value: `GH₵ ${kpiData.totalMonthlyRevenue.toLocaleString()}`,
         change: "+8.3%",
+        suffix: "vs last month",
         trend: "up" as const,
-        icon: <Coins size={22} />,
-        color: "#22C55E",
-        bgColor: "#F0FDF4",
-        borderColor: "#22C55E",
+        icon: Coins,
+        color: "text-emerald-500",
+        bg: "bg-emerald-50",
+        accent: "#22C55E",
     },
     {
         label: "Revenue Leakage Prevented",
         value: `GH₵ ${kpiData.revenueLeakagePrevented.toLocaleString()}`,
         change: "+24%",
+        suffix: "this quarter",
         trend: "up" as const,
-        icon: <ShieldCheck size={22} />,
-        color: "#ED7D31",
-        bgColor: "#FFF5EC",
-        borderColor: "#ED7D31",
+        icon: ShieldCheck,
+        color: "text-[#ED7D31]",
+        bg: "bg-orange-50",
+        accent: "#ED7D31",
     },
     {
         label: "Pending Deactivations",
         value: kpiData.pendingDeactivations.toString(),
         change: "-3",
+        suffix: "from last week",
         trend: "down" as const,
-        icon: <AlertTriangle size={22} />,
-        color: "#EF4444",
-        bgColor: "#FEF2F2",
-        borderColor: "#EF4444",
+        icon: AlertTriangle,
+        color: "text-red-500",
+        bg: "bg-red-50",
+        accent: "#EF4444",
     },
 ];
 
 export default function KPICards() {
     return (
-        <div
-            style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                gap: "1rem",
-            }}
-        >
-            {kpis.map((kpi, index) => (
-                <div
-                    key={kpi.label}
-                    className={`kpi-card animate-fade-in-up delay-${(index + 1) * 100}`}
-                    style={{ opacity: 0 }}
-                >
-                    <div
-                        style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: 4,
-                            height: "100%",
-                            background: kpi.borderColor,
-                            borderRadius: "0.875rem 0 0 0.875rem",
-                        }}
-                    />
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                        }}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {kpis.map((kpi, i) => {
+                const Icon = kpi.icon;
+                const TrendIcon = kpi.trend === "up" ? TrendingUp : TrendingDown;
+                const trendColor = kpi.trend === "up" ? "text-emerald-500" : "text-red-500";
+
+                return (
+                    <Card
+                        key={kpi.label}
+                        className="animate-fade-in-up border border-border hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden relative"
+                        style={{ animationDelay: `${i * 75}ms`, opacity: 0 }}
                     >
-                        <div>
-                            <p
-                                style={{
-                                    fontSize: "0.75rem",
-                                    fontWeight: 500,
-                                    color: "#71717A",
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.05em",
-                                    marginBottom: "0.375rem",
-                                }}
-                            >
-                                {kpi.label}
-                            </p>
-                            <p
-                                style={{
-                                    fontSize: "1.625rem",
-                                    fontWeight: 800,
-                                    color: "#1A1A2E",
-                                    lineHeight: 1.1,
-                                    letterSpacing: "-0.02em",
-                                }}
-                            >
-                                {kpi.value}
-                            </p>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.25rem",
-                                    marginTop: "0.375rem",
-                                }}
-                            >
-                                {kpi.trend === "up" ? (
-                                    <TrendingUp size={14} color="#22C55E" />
-                                ) : (
-                                    <TrendingDown size={14} color="#EF4444" />
-                                )}
-                                <span
-                                    style={{
-                                        fontSize: "0.75rem",
-                                        fontWeight: 600,
-                                        color: kpi.trend === "up" ? "#22C55E" : "#EF4444",
-                                    }}
-                                >
-                                    {kpi.change}
-                                </span>
-                                <span style={{ fontSize: "0.7rem", color: "#A1A1AA" }}>vs last month</span>
-                            </div>
-                        </div>
+                        {/* Left accent bar */}
                         <div
-                            style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: "0.625rem",
-                                background: kpi.bgColor,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: kpi.color,
-                                flexShrink: 0,
-                            }}
-                        >
-                            {kpi.icon}
-                        </div>
-                    </div>
-                </div>
-            ))}
+                            className="absolute left-0 top-0 h-full w-1 rounded-l-lg"
+                            style={{ background: kpi.accent }}
+                        />
+
+                        <CardContent className="pl-6 pr-5 py-5">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[0.7rem] font-semibold uppercase tracking-widest text-muted-foreground truncate mb-1">
+                                        {kpi.label}
+                                    </p>
+                                    <p className="text-2xl font-extrabold text-foreground tracking-tight leading-none mb-2">
+                                        {kpi.value}
+                                    </p>
+                                    <div className="flex items-center gap-1.5">
+                                        <TrendIcon size={13} className={trendColor} />
+                                        <span className={`text-xs font-semibold ${trendColor}`}>{kpi.change}</span>
+                                        <span className="text-[0.7rem] text-muted-foreground">{kpi.suffix}</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    className={`w-11 h-11 rounded-xl ${kpi.bg} ${kpi.color} flex items-center justify-center flex-shrink-0`}
+                                >
+                                    <Icon size={20} />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                );
+            })}
         </div>
     );
 }

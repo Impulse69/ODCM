@@ -1,7 +1,26 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Search, Bell, User, Settings, LogOut, X } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Search, Bell, X, User, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 const mockNotifications = [
     {
@@ -10,6 +29,7 @@ const mockNotifications = [
         message: "API returned 503 for 3 vehicles. Retry scheduled.",
         time: "2 min ago",
         type: "error" as const,
+        unread: true,
     },
     {
         id: 2,
@@ -17,6 +37,7 @@ const mockNotifications = [
         message: "42 records imported successfully, 2 duplicates skipped.",
         time: "15 min ago",
         type: "success" as const,
+        unread: true,
     },
     {
         id: 3,
@@ -24,6 +45,7 @@ const mockNotifications = [
         message: "17 vehicles pending deactivation due to overdue payments.",
         time: "1 hr ago",
         type: "warning" as const,
+        unread: false,
     },
     {
         id: 4,
@@ -31,367 +53,195 @@ const mockNotifications = [
         message: "Trakzee API rate limit approaching. 80% consumed.",
         time: "3 hr ago",
         type: "warning" as const,
+        unread: false,
     },
 ];
 
+const typeColors: Record<string, string> = {
+    error: "bg-red-500",
+    warning: "bg-amber-500",
+    success: "bg-emerald-500",
+};
+
 interface TopNavProps {
     onNavigate?: (section: string) => void;
+    sidebarWidth?: number;
 }
 
-export default function TopNav({ onNavigate }: TopNavProps) {
+export default function TopNav({ onNavigate, sidebarWidth = 240 }: TopNavProps) {
     const [searchQuery, setSearchQuery] = useState("");
-    const [showNotifications, setShowNotifications] = useState(false);
-    const [showProfile, setShowProfile] = useState(false);
-    const notifRef = useRef<HTMLDivElement>(null);
-    const profileRef = useRef<HTMLDivElement>(null);
+    const [notifications, setNotifications] = useState(mockNotifications);
 
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-                setShowNotifications(false);
-            }
-            if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-                setShowProfile(false);
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
+    const unreadCount = notifications.filter((n) => n.unread).length;
+
+    const markAllRead = useCallback(() => {
+        setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+    }, []);
+
+    const dismissNotification = useCallback((id: number) => {
+        setNotifications((prev) => prev.filter((n) => n.id !== id));
     }, []);
 
     return (
         <header
-            style={{
-                height: 64,
-                background: "white",
-                borderBottom: "1px solid #E4E4E7",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0 1.5rem",
-                position: "sticky",
-                top: 0,
-                zIndex: 30,
-            }}
+            className="fixed top-0 right-0 z-30 flex items-center justify-between h-16 bg-card border-b border-border px-6 gap-4"
+            style={{ left: sidebarWidth, transition: "left 0.3s ease" }}
         >
-            {/* Search */}
-            <div
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    background: "#F4F4F5",
-                    borderRadius: "0.5rem",
-                    padding: "0.5rem 0.75rem",
-                    width: "100%",
-                    maxWidth: 420,
-                    border: "1px solid transparent",
-                    transition: "border-color 0.2s ease",
-                }}
-            >
-                <Search size={18} color="#A1A1AA" />
-                <input
+            {/* ── Search ── */}
+            <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                <Input
                     type="text"
                     placeholder="Search customers, vehicles, IMEI…"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{
-                        border: "none",
-                        background: "transparent",
-                        outline: "none",
-                        fontSize: "0.875rem",
-                        color: "#1A1A2E",
-                        width: "100%",
-                        fontFamily: "inherit",
-                    }}
+                    className="pl-9 pr-8 text-sm bg-muted/50 border-border focus-visible:ring-primary/30 h-9"
                 />
                 {searchQuery && (
                     <button
                         onClick={() => setSearchQuery("")}
-                        style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     >
-                        <X size={14} color="#A1A1AA" />
+                        <X size={14} />
                     </button>
                 )}
             </div>
 
-            {/* Right side */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                {/* Notifications */}
-                <div ref={notifRef} style={{ position: "relative" }}>
-                    <button
-                        onClick={() => {
-                            setShowNotifications(!showNotifications);
-                            setShowProfile(false);
-                        }}
-                        style={{
-                            position: "relative",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: 40,
-                            height: 40,
-                            borderRadius: "0.5rem",
-                            border: "none",
-                            background: showNotifications ? "#FFF5EC" : "transparent",
-                            cursor: "pointer",
-                            transition: "background 0.2s ease",
-                        }}
-                    >
-                        <Bell size={20} color={showNotifications ? "#ED7D31" : "#52525B"} />
-                        <span
-                            className="animate-pulse-dot"
-                            style={{
-                                position: "absolute",
-                                top: 8,
-                                right: 8,
-                                width: 8,
-                                height: 8,
-                                borderRadius: "50%",
-                                background: "#EF4444",
-                                border: "2px solid white",
-                            }}
-                        />
-                    </button>
+            {/* ── Right controls ── */}
+            <div className="flex items-center gap-2">
 
-                    {showNotifications && (
-                        <div
-                            style={{
-                                position: "absolute",
-                                right: 0,
-                                top: "calc(100% + 8px)",
-                                width: 380,
-                                background: "white",
-                                borderRadius: "0.75rem",
-                                border: "1px solid #E4E4E7",
-                                boxShadow: "0 12px 32px rgba(0,0,0,0.12)",
-                                overflow: "hidden",
-                                zIndex: 50,
-                            }}
+                {/* Notifications */}
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="relative text-muted-foreground hover:text-foreground hover:bg-accent"
+                            aria-label="Notifications"
                         >
-                            <div
-                                style={{
-                                    padding: "0.875rem 1rem",
-                                    borderBottom: "1px solid #E4E4E7",
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                }}
-                            >
-                                <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>Notifications</span>
-                                <span
-                                    style={{
-                                        fontSize: "0.7rem",
-                                        background: "#EF4444",
-                                        color: "white",
-                                        padding: "2px 8px",
-                                        borderRadius: 999,
-                                        fontWeight: 600,
-                                    }}
-                                >
-                                    {mockNotifications.length}
-                                </span>
+                            <Bell size={18} />
+                            {unreadCount > 0 && (
+                                <span className="animate-pulse-dot absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 border-2 border-card" />
+                            )}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-[380px] p-0 shadow-xl" sideOffset={8}>
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-border">
+                            <div className="flex items-center gap-2">
+                                <span className="font-semibold text-sm">Notifications</span>
+                                {unreadCount > 0 && (
+                                    <Badge variant="destructive" className="h-5 px-1.5 text-[0.65rem]">
+                                        {unreadCount}
+                                    </Badge>
+                                )}
                             </div>
-                            {mockNotifications.map((n) => (
+                            {unreadCount > 0 && (
+                                <button
+                                    onClick={markAllRead}
+                                    className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                                >
+                                    Mark all read
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Notification list */}
+                        <div className="divide-y divide-border max-h-72 overflow-y-auto">
+                            {notifications.length === 0 && (
+                                <div className="py-8 text-center text-muted-foreground text-sm">
+                                    No notifications
+                                </div>
+                            )}
+                            {notifications.map((n) => (
                                 <div
                                     key={n.id}
-                                    style={{
-                                        padding: "0.75rem 1rem",
-                                        borderBottom: "1px solid #F4F4F5",
-                                        cursor: "pointer",
-                                        transition: "background 0.15s ease",
-                                    }}
-                                    onMouseEnter={(e) =>
-                                        (e.currentTarget.style.background = "#FAFAFA")
-                                    }
-                                    onMouseLeave={(e) =>
-                                        (e.currentTarget.style.background = "transparent")
-                                    }
+                                    className={cn(
+                                        "flex gap-3 p-4 hover:bg-muted/50 transition-colors group relative",
+                                        n.unread && "bg-primary/5"
+                                    )}
                                 >
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
-                                            <div
-                                                style={{
-                                                    width: 8,
-                                                    height: 8,
-                                                    borderRadius: "50%",
-                                                    marginTop: 6,
-                                                    flexShrink: 0,
-                                                    background:
-                                                        n.type === "error"
-                                                            ? "#EF4444"
-                                                            : n.type === "warning"
-                                                                ? "#F59E0B"
-                                                                : "#22C55E",
-                                                }}
-                                            />
-                                            <div>
-                                                <div style={{ fontWeight: 600, fontSize: "0.8125rem", color: "#1A1A2E" }}>
-                                                    {n.title}
-                                                </div>
-                                                <div style={{ fontSize: "0.75rem", color: "#71717A", marginTop: 2 }}>
-                                                    {n.message}
-                                                </div>
-                                            </div>
+                                    <span
+                                        className={cn(
+                                            "mt-1.5 flex-shrink-0 w-2 h-2 rounded-full",
+                                            typeColors[n.type]
+                                        )}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1">
+                                            <p className="font-semibold text-xs text-foreground">{n.title}</p>
+                                            {n.unread && (
+                                                <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                                            )}
                                         </div>
-                                        <span style={{ fontSize: "0.6875rem", color: "#A1A1AA", whiteSpace: "nowrap", marginLeft: 8 }}>
-                                            {n.time}
-                                        </span>
+                                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                                            {n.message}
+                                        </p>
+                                        <p className="text-[0.65rem] text-muted-foreground/60 mt-1">{n.time}</p>
                                     </div>
+                                    <button
+                                        onClick={() => dismissNotification(n.id)}
+                                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all flex-shrink-0"
+                                    >
+                                        <X size={12} />
+                                    </button>
                                 </div>
                             ))}
-                            <div
-                                style={{
-                                    padding: "0.625rem 1rem",
-                                    textAlign: "center",
-                                    fontSize: "0.8125rem",
-                                    color: "#ED7D31",
-                                    fontWeight: 600,
-                                    cursor: "pointer",
-                                }}
-                            >
-                                View All Notifications
-                            </div>
                         </div>
-                    )}
-                </div>
+                        <Separator />
+                        <button className="w-full py-2.5 text-xs text-primary font-semibold hover:bg-primary/5 transition-colors rounded-b-lg">
+                            View all notifications
+                        </button>
+                    </PopoverContent>
+                </Popover>
 
                 {/* Profile */}
-                <div ref={profileRef} style={{ position: "relative" }}>
-                    <button
-                        onClick={() => {
-                            setShowProfile(!showProfile);
-                            setShowNotifications(false);
-                        }}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.625rem",
-                            padding: "0.375rem 0.75rem",
-                            borderRadius: "0.5rem",
-                            border: "1px solid #E4E4E7",
-                            background: showProfile ? "#FFF5EC" : "white",
-                            cursor: "pointer",
-                            transition: "all 0.2s ease",
-                        }}
-                    >
-                        <div
-                            style={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: "50%",
-                                background: "linear-gradient(135deg, #ED7D31, #F5A66A)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "white",
-                                fontWeight: 700,
-                                fontSize: "0.8rem",
-                            }}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-2 pl-2 pr-3 h-9 border-border hover:border-primary/50 hover:bg-primary/5 transition-all"
                         >
-                            AD
-                        </div>
-                        <div style={{ textAlign: "left" }}>
-                            <div style={{ fontWeight: 600, fontSize: "0.8125rem", color: "#1A1A2E", lineHeight: 1.2 }}>
-                                Admin
+                            <Avatar className="w-6 h-6">
+                                <AvatarFallback className="bg-gradient-to-br from-[#ED7D31] to-[#C9651B] text-white text-[0.6rem] font-bold">
+                                    AD
+                                </AvatarFallback>
+                            </Avatar>
+                            <div className="text-left hidden xs:block">
+                                <div className="text-xs font-semibold leading-tight">Admin</div>
+                                <div className="text-[0.6rem] text-muted-foreground leading-tight">ODG Master</div>
                             </div>
-                            <div style={{ fontSize: "0.6875rem", color: "#A1A1AA", lineHeight: 1.2 }}>
-                                admin@odcms.com.gh
-                            </div>
-                        </div>
-                    </button>
-
-                    {showProfile && (
-                        <div
-                            style={{
-                                position: "absolute",
-                                right: 0,
-                                top: "calc(100% + 8px)",
-                                width: 200,
-                                background: "white",
-                                borderRadius: "0.75rem",
-                                border: "1px solid #E4E4E7",
-                                boxShadow: "0 12px 32px rgba(0,0,0,0.12)",
-                                overflow: "hidden",
-                                zIndex: 50,
-                            }}
+                            <ChevronDown size={12} className="text-muted-foreground" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52 shadow-xl" sideOffset={8}>
+                        <DropdownMenuLabel className="pb-1">
+                            <div className="font-semibold text-sm">System Administrator</div>
+                            <div className="text-xs text-muted-foreground font-normal">admin@odg.com.gh</div>
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            onClick={() => onNavigate?.("profile")}
+                            className="cursor-pointer gap-2 text-sm"
                         >
-                            <button
-                                onClick={() => {
-                                    if (onNavigate) onNavigate("profile");
-                                    setShowProfile(false);
-                                }}
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.5rem",
-                                    width: "100%",
-                                    padding: "0.625rem 1rem",
-                                    border: "none",
-                                    background: "transparent",
-                                    fontSize: "0.8125rem",
-                                    color: "#3F3F46",
-                                    cursor: "pointer",
-                                    transition: "background 0.15s ease",
-                                    fontFamily: "inherit",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#F4F4F5")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                            >
-                                <User size={16} /> Profile
-                            </button>
-                            <button
-                                onClick={() => {
-                                    if (onNavigate) onNavigate("settings");
-                                    setShowProfile(false);
-                                }}
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.5rem",
-                                    width: "100%",
-                                    padding: "0.625rem 1rem",
-                                    border: "none",
-                                    background: "transparent",
-                                    fontSize: "0.8125rem",
-                                    color: "#3F3F46",
-                                    cursor: "pointer",
-                                    transition: "background 0.15s ease",
-                                    fontFamily: "inherit",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#F4F4F5")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                            >
-                                <Settings size={16} /> Settings
-                            </button>
-                            <div style={{ height: 1, background: "#E4E4E7" }} />
-                            <button
-                                onClick={() => {
-                                    alert("Signed out successfully!");
-                                    setShowProfile(false);
-                                    window.location.reload();
-                                }}
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.5rem",
-                                    width: "100%",
-                                    padding: "0.625rem 1rem",
-                                    border: "none",
-                                    background: "transparent",
-                                    fontSize: "0.8125rem",
-                                    color: "#EF4444",
-                                    cursor: "pointer",
-                                    transition: "background 0.15s ease",
-                                    fontFamily: "inherit",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#FEF2F2")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                            >
-                                <LogOut size={16} /> Sign Out
-                            </button>
-                        </div>
-                    )}
-                </div>
+                            <User size={14} /> Profile
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={() => onNavigate?.("settings")}
+                            className="cursor-pointer gap-2 text-sm"
+                        >
+                            <Settings size={14} /> Settings
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            className="cursor-pointer gap-2 text-sm text-destructive focus:text-destructive focus:bg-destructive/10"
+                            onClick={() => window.location.reload()}
+                        >
+                            <LogOut size={14} /> Sign Out
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </header>
     );
