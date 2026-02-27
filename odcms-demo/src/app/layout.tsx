@@ -24,7 +24,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+        <TooltipProvider delayDuration={0}>{children}</TooltipProvider>
       </body>
     </html>
   );
