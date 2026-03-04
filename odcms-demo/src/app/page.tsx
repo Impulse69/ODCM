@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import Sidebar from "@/components/Sidebar";
 import TopNav from "@/components/TopNav";
 import KPICards from "@/components/KPICards";
@@ -12,14 +14,23 @@ import SubscriptionsView from "@/components/SubscriptionsView";
 import RemovedView from "@/components/RemovedView";
 import ProfileView from "@/components/ProfileView";
 import SettingsView from "@/components/SettingsView";
-import { Activity, Clock } from "lucide-react";
+import { Activity, Clock, Loader2 } from "lucide-react";
 
 const SIDEBAR_COLLAPSED_WIDTH = 68;
 const SIDEBAR_EXPANDED_WIDTH = 240;
 
 export default function DashboardPage() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isLoading, isAuthenticated, router]);
 
   // Derive current sidebar width for content offset
   const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
@@ -27,6 +38,18 @@ export default function DashboardPage() {
   const now = new Date();
   const timeString = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   const dateString = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+  // Show loading state while checking auth
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={32} className="animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Loading…</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
 
 const mockNotifications = [
     {
@@ -69,6 +70,7 @@ interface TopNavProps {
 }
 
 export default function TopNav({ onNavigate, sidebarWidth = 240 }: TopNavProps) {
+    const { user, logout } = useAuth();
     const [searchQuery, setSearchQuery] = useState("");
     const [notifications, setNotifications] = useState(mockNotifications);
 
@@ -205,20 +207,20 @@ export default function TopNav({ onNavigate, sidebarWidth = 240 }: TopNavProps) 
                         >
                             <Avatar className="w-6 h-6">
                                 <AvatarFallback className="bg-gradient-to-br from-[#ED7D31] to-[#C9651B] text-white text-[0.6rem] font-bold">
-                                    AD
+                                    {user?.initials || "AD"}
                                 </AvatarFallback>
                             </Avatar>
                             <div className="text-left hidden xs:block">
-                                <div className="text-xs font-semibold leading-tight">Admin</div>
-                                <div className="text-[0.6rem] text-muted-foreground leading-tight">ODG Master</div>
+                                <div className="text-xs font-semibold leading-tight">{user?.name?.split(" ")[0] || "Admin"}</div>
+                                <div className="text-[0.6rem] text-muted-foreground leading-tight">{user?.role || "ODG Master"}</div>
                             </div>
                             <ChevronDown size={12} className="text-muted-foreground" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-52 shadow-xl" sideOffset={8}>
                         <DropdownMenuLabel className="pb-1">
-                            <div className="font-semibold text-sm">System Administrator</div>
-                            <div className="text-xs text-muted-foreground font-normal">admin@odg.com.gh</div>
+                            <div className="font-semibold text-sm">{user?.name || "System Administrator"}</div>
+                            <div className="text-xs text-muted-foreground font-normal">{user?.email || "admin@odg.com.gh"}</div>
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
@@ -236,7 +238,7 @@ export default function TopNav({ onNavigate, sidebarWidth = 240 }: TopNavProps) 
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                             className="cursor-pointer gap-2 text-sm text-destructive focus:text-destructive focus:bg-destructive/10"
-                            onClick={() => window.location.reload()}
+                            onClick={() => logout()}
                         >
                             <LogOut size={14} /> Sign Out
                         </DropdownMenuItem>
