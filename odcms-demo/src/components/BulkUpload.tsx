@@ -108,7 +108,7 @@ export default function BulkUpload() {
           {/* Template hint */}
           {!file && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-700">
-              <Info size={14} className="flex-shrink-0 mt-0.5" />
+              <Info size={14} className="shrink-0 mt-0.5" />
               <span>
                 Your CSV must include the columns:{" "}
                 <code className="font-mono font-semibold">clientName, phone, vehicleIMEI, plan, expiryDate</code>
@@ -135,7 +135,7 @@ export default function BulkUpload() {
               <div
                 className={cn(
                   "w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 transition-all duration-300",
-                  dragOver ? "bg-[#FFF5EC]" : "bg-muted"
+                  dragOver ? "bg-odg-orange-bg" : "bg-muted"
                 )}
               >
                 <Upload
@@ -162,7 +162,7 @@ export default function BulkUpload() {
           {file && !parsed && (
             <div className="space-y-4">
               <div className="flex items-center gap-4 p-4 rounded-xl bg-primary/5 border border-primary/20">
-                <div className="w-11 h-11 rounded-lg bg-background shadow-sm flex items-center justify-center flex-shrink-0 border border-border">
+                <div className="w-11 h-11 rounded-lg bg-background shadow-sm flex items-center justify-center shrink-0 border border-border">
                   <FileSpreadsheet size={22} className="text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -175,7 +175,7 @@ export default function BulkUpload() {
                   size="sm"
                   onClick={handleParse}
                   disabled={parsing}
-                  className="gap-1.5 text-xs flex-shrink-0"
+                  className="gap-1.5 text-xs shrink-0"
                 >
                   {parsing ? (
                     <>

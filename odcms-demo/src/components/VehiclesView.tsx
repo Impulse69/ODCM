@@ -125,7 +125,7 @@ export default function VehiclesView() {
                                         <TableCell>
                                             <Badge
                                                 variant="outline"
-                                                className="text-[0.65rem] font-semibold px-2 py-0.5 bg-[#FFF5EC] text-[#C9651B] border-orange-200"
+                                                className="text-[0.65rem] font-semibold px-2 py-0.5 bg-odg-orange-bg text-odg-orange-dark border-orange-200"
                                             >
                                                 {v.plan}
                                             </Badge>

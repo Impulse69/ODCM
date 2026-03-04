@@ -40,7 +40,7 @@ export default function ProfileView() {
                     <div className="flex items-center gap-5">
                         <div className="relative">
                             <Avatar className="w-16 h-16">
-                                <AvatarFallback className="bg-gradient-to-br from-[#ED7D31] to-[#C9651B] text-white text-xl font-bold">
+                                <AvatarFallback className="bg-linear-to-br from-odg-orange to-odg-orange-dark text-white text-xl font-bold">
                                     AD
                                 </AvatarFallback>
                             </Avatar>

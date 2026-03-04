@@ -128,9 +128,9 @@ export default function CustomersView() {
                                     key={c.id}
                                     className="flex items-center gap-4 px-5 py-4 hover:bg-muted/30 transition-colors group"
                                 >
-                                    <Avatar className="w-10 h-10 flex-shrink-0">
+                                    <Avatar className="w-10 h-10 shrink-0">
                                         <AvatarFallback
-                                            className={`bg-gradient-to-br ${grad} text-white text-xs font-bold`}
+                                            className={`bg-linear-to-br ${grad} text-white text-xs font-bold`}
                                         >
                                             {c.initials}
                                         </AvatarFallback>
@@ -154,7 +154,7 @@ export default function CustomersView() {
                                         {c.status}
                                     </Badge>
 
-                                    <div className="text-right flex-shrink-0">
+                                    <div className="text-right shrink-0">
                                         <p className="text-xs font-semibold text-foreground">GH₵ {c.totalMonthly}/mo</p>
                                         <p className="text-[0.65rem] text-muted-foreground mt-0.5">{c.plan} plan</p>
                                     </div>

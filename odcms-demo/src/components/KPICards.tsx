@@ -88,7 +88,7 @@ export default function KPICards() {
                                 </div>
 
                                 <div
-                                    className={`w-11 h-11 rounded-xl ${kpi.bg} ${kpi.color} flex items-center justify-center flex-shrink-0`}
+                                    className={`w-11 h-11 rounded-xl ${kpi.bg} ${kpi.color} flex items-center justify-center shrink-0`}
                                 >
                                     <Icon size={20} />
                                 </div>
