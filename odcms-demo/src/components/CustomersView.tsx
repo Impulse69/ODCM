@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { Search, UserPlus, MoreHorizontal, Phone, Car } from "lucide-react";
+import AddCustomerForm from "@/components/AddCustomerForm"
+import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogHeader } from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,9 +81,19 @@ export default function CustomersView() {
                         {customers.length} registered customers
                     </p>
                 </div>
-                <Button size="sm" className="gap-2">
-                    <UserPlus size={15} /> Add Customer
-                </Button>
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button size="sm" className="gap-2">
+                            <UserPlus size={15} /> Add Customer
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Add Customer</DialogTitle>
+                        </DialogHeader>
+                        <AddCustomerForm onCreated={() => { /* close handled by dialog UI; consumer can add further behavior */ }} />
+                    </DialogContent>
+                </Dialog>
             </div>
 
             {/* Stats row */}
