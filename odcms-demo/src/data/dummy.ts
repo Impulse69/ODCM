@@ -10,6 +10,7 @@ export interface Subscription {
   plateNumber: string;
   imei: string;
   expiryDate: string;
+  installationDate?: string;
   status: SubscriptionStatus;
   trakzeeStatus: TrakzeeStatus;
   plan: string;

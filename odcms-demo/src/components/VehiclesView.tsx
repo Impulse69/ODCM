@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
     Table,
     TableBody,
@@ -20,26 +21,100 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { subscriptions } from "@/data/dummy";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { subscriptions as initialSubscriptions, type Subscription } from "@/data/dummy";
 import { cn } from "@/lib/utils";
+
+const PLAN_AMOUNTS: Record<string, number> = {
+    Basic: 99,
+    Standard: 199,
+    Premium: 299,
+    Fleet: 499,
+};
+
+const emptyForm = {
+    plateNumber: "",
+    customerName: "",
+    phone: "",
+    imei: "",
+    plan: "",
+    trakzeeStatus: "" as "" | "Active" | "Deactivated",
+    installationDate: "",
+    expiryDate: "",
+};
 
 export default function VehiclesView() {
     const [search, setSearch] = useState("");
+    const [vehicleList, setVehicleList] = useState<Subscription[]>(initialSubscriptions);
+    const [showForm, setShowForm] = useState(false);
+    const [form, setForm] = useState(emptyForm);
 
     const vehicles = useMemo(
         () =>
-            subscriptions.filter(
+            vehicleList.filter(
                 (s) =>
                     !search ||
                     s.plateNumber.toLowerCase().includes(search.toLowerCase()) ||
                     s.imei.includes(search) ||
                     s.customerName.toLowerCase().includes(search.toLowerCase())
             ),
-        [search]
+        [search, vehicleList]
     );
 
-    const syncedCount = subscriptions.filter((s) => s.trakzeeStatus === "Active").length;
-    const desyncedCount = subscriptions.filter((s) => s.trakzeeStatus === "Deactivated").length;
+    const syncedCount = vehicleList.filter((s) => s.trakzeeStatus === "Active").length;
+    const desyncedCount = vehicleList.filter((s) => s.trakzeeStatus === "Deactivated").length;
+
+    const handleOpenForm = () => {
+        setForm(emptyForm);
+        setShowForm(true);
+    };
+
+    const handleSave = () => {
+        // Basic validation — all fields required
+        if (
+            !form.plateNumber ||
+            !form.customerName ||
+            !form.phone ||
+            !form.imei ||
+            !form.plan ||
+            !form.trakzeeStatus ||
+            !form.installationDate ||
+            !form.expiryDate
+        ) {
+            return;
+        }
+
+        const newVehicle: Subscription = {
+            id: `SUB-${String(vehicleList.length + 1).padStart(3, "0")}`,
+            plateNumber: form.plateNumber,
+            customerName: form.customerName,
+            phone: form.phone,
+            imei: form.imei,
+            plan: form.plan,
+            trakzeeStatus: form.trakzeeStatus as "Active" | "Deactivated",
+            installationDate: form.installationDate,
+            expiryDate: form.expiryDate,
+            status: "Active",
+            monthlyAmount: PLAN_AMOUNTS[form.plan] ?? 99,
+        };
+
+        setVehicleList((prev) => [newVehicle, ...prev]);
+        setShowForm(false);
+    };
 
     return (
         <div className="space-y-5 animate-fade-in-up" style={{ opacity: 0 }}>
@@ -49,10 +124,10 @@ export default function VehiclesView() {
                         Vehicle Registry
                     </h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        {subscriptions.length} vehicles tracked with IMEI
+                        {vehicleList.length} vehicles tracked with IMEI
                     </p>
                 </div>
-                <Button size="sm" className="gap-2">
+                <Button size="sm" className="gap-2" onClick={handleOpenForm}>
                     <Car size={15} /> Register Vehicle
                 </Button>
             </div>
@@ -60,7 +135,7 @@ export default function VehiclesView() {
             {/* Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[
-                    { label: "Total Vehicles", value: subscriptions.length, color: "text-foreground" },
+                    { label: "Total Vehicles", value: vehicleList.length, color: "text-foreground" },
                     { label: "Trakzee Synced", value: syncedCount, color: "text-blue-600" },
                     { label: "Desynced / Off", value: desyncedCount, color: "text-red-500" },
                 ].map((s) => (
@@ -96,7 +171,7 @@ export default function VehiclesView() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                    {["Plate Number", "Owner", "IMEI", "Plan", "Trakzee", "Expiry", ""].map((h) => (
+                                    {["Plate Number", "Owner", "IMEI", "Plan", "Trakzee", "Installation Date", "Expiry", ""].map((h) => (
                                         <TableHead
                                             key={h}
                                             className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground"
@@ -109,7 +184,7 @@ export default function VehiclesView() {
                             <TableBody>
                                 {vehicles.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="py-10 text-center text-muted-foreground text-sm">
+                                        <TableCell colSpan={8} className="py-10 text-center text-muted-foreground text-sm">
                                             No vehicles match your search.
                                         </TableCell>
                                     </TableRow>
@@ -147,6 +222,9 @@ export default function VehiclesView() {
                                                 {v.trakzeeStatus}
                                             </Badge>
                                         </TableCell>
+                                        <TableCell className="text-sm text-muted-foreground">
+                                            {v.installationDate ?? "—"}
+                                        </TableCell>
                                         <TableCell className="text-sm text-muted-foreground">{v.expiryDate}</TableCell>
                                         <TableCell className="pr-5">
                                             <DropdownMenu>
@@ -175,6 +253,131 @@ export default function VehiclesView() {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* ── Register Vehicle Dialog ────────────────────────────────────── */}
+            <Dialog open={showForm} onOpenChange={setShowForm}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Register New Vehicle</DialogTitle>
+                        <DialogDescription>
+                            Fill in the vehicle and owner details below.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4 py-2">
+                        {/* Row 1 — Plate & Owner */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="reg-plate" className="text-xs">Plate Number</Label>
+                                <Input
+                                    id="reg-plate"
+                                    placeholder="GP ABC 123"
+                                    value={form.plateNumber}
+                                    onChange={(e) => setForm({ ...form, plateNumber: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="reg-owner" className="text-xs">Owner Name</Label>
+                                <Input
+                                    id="reg-owner"
+                                    placeholder="Full name"
+                                    value={form.customerName}
+                                    onChange={(e) => setForm({ ...form, customerName: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Row 2 — Phone & IMEI */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="reg-phone" className="text-xs">Phone</Label>
+                                <Input
+                                    id="reg-phone"
+                                    placeholder="+27 61 234 5678"
+                                    value={form.phone}
+                                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="reg-imei" className="text-xs">IMEI</Label>
+                                <Input
+                                    id="reg-imei"
+                                    placeholder="356938035643809"
+                                    value={form.imei}
+                                    onChange={(e) => setForm({ ...form, imei: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Row 3 — Plan & Trakzee Status */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Plan</Label>
+                                <Select
+                                    value={form.plan}
+                                    onValueChange={(val) => setForm({ ...form, plan: val })}
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select plan" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Basic">Basic</SelectItem>
+                                        <SelectItem value="Standard">Standard</SelectItem>
+                                        <SelectItem value="Premium">Premium</SelectItem>
+                                        <SelectItem value="Fleet">Fleet</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Trakzee Status</Label>
+                                <Select
+                                    value={form.trakzeeStatus}
+                                    onValueChange={(val) =>
+                                        setForm({ ...form, trakzeeStatus: val as "Active" | "Deactivated" })
+                                    }
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Active">Active</SelectItem>
+                                        <SelectItem value="Deactivated">Deactivated</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        {/* Row 4 — Installation Date & Expiry Date */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="reg-install-date" className="text-xs">Installation Date</Label>
+                                <Input
+                                    id="reg-install-date"
+                                    type="date"
+                                    value={form.installationDate}
+                                    onChange={(e) => setForm({ ...form, installationDate: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="reg-expiry" className="text-xs">Expiry Date</Label>
+                                <Input
+                                    id="reg-expiry"
+                                    type="date"
+                                    value={form.expiryDate}
+                                    onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowForm(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleSave}>Save Vehicle</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
