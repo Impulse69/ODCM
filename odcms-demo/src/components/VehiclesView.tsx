@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Search, Car, Wifi, WifiOff, MoreHorizontal } from "lucide-react";
+import { Search, Car, Wifi, WifiOff, MoreHorizontal, Check, ChevronsUpDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { subscriptions as initialSubscriptions, type Subscription } from "@/data/dummy";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +68,10 @@ export default function VehiclesView() {
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState(emptyForm);
 
+    // Popover state
+    const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+    const [customerSearch, setCustomerSearch] = useState("");
+
     const vehicles = useMemo(
         () =>
             vehicleList.filter(
@@ -75,11 +84,30 @@ export default function VehiclesView() {
         [search, vehicleList]
     );
 
+    // Derive unique customers from the current vehicleList
+    const uniqueCustomers = useMemo(() => {
+        const map = new Map<string, { name: string; phone: string }>();
+        vehicleList.forEach((sub) => {
+            if (!map.has(sub.customerName)) {
+                map.set(sub.customerName, { name: sub.customerName, phone: sub.phone });
+            }
+        });
+        return Array.from(map.values());
+    }, [vehicleList]);
+
+    const filteredCustomers = useMemo(() => {
+        return uniqueCustomers.filter(c =>
+            c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+            c.phone.includes(customerSearch)
+        );
+    }, [uniqueCustomers, customerSearch]);
+
     const syncedCount = vehicleList.filter((s) => s.trakzeeStatus === "Active").length;
     const desyncedCount = vehicleList.filter((s) => s.trakzeeStatus === "Deactivated").length;
 
     const handleOpenForm = () => {
         setForm(emptyForm);
+        setCustomerSearch("");
         setShowForm(true);
     };
 
@@ -114,6 +142,12 @@ export default function VehiclesView() {
 
         setVehicleList((prev) => [newVehicle, ...prev]);
         setShowForm(false);
+    };
+
+    const selectCustomer = (name: string, phone: string) => {
+        setForm({ ...form, customerName: name, phone: phone });
+        setCustomerDropdownOpen(false);
+        setCustomerSearch("");
     };
 
     return (
@@ -267,7 +301,7 @@ export default function VehiclesView() {
                     <div className="grid gap-4 py-2">
                         {/* Row 1 — Plate & Owner */}
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 flex flex-col justify-end">
                                 <Label htmlFor="reg-plate" className="text-xs">Plate Number</Label>
                                 <Input
                                     id="reg-plate"
@@ -276,20 +310,79 @@ export default function VehiclesView() {
                                     onChange={(e) => setForm({ ...form, plateNumber: e.target.value })}
                                 />
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 flex flex-col justify-end">
                                 <Label htmlFor="reg-owner" className="text-xs">Owner Name</Label>
-                                <Input
-                                    id="reg-owner"
-                                    placeholder="Full name"
-                                    value={form.customerName}
-                                    onChange={(e) => setForm({ ...form, customerName: e.target.value })}
-                                />
+                                <Popover open={customerDropdownOpen} onOpenChange={setCustomerDropdownOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            id="reg-owner"
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={customerDropdownOpen}
+                                            className="w-full justify-between font-normal"
+                                        >
+                                            {form.customerName ? form.customerName : "Select customer..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-h-[300px] overflow-hidden p-0" align="start">
+                                        <div className="flex items-center border-b px-3">
+                                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                            <input
+                                                placeholder="Search customers..."
+                                                value={customerSearch}
+                                                onChange={(e) => setCustomerSearch(e.target.value)}
+                                                className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                            />
+                                        </div>
+                                        <div className="max-h-[200px] overflow-y-auto p-1">
+                                            {filteredCustomers.length === 0 ? (
+                                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                                    No customers found.
+                                                </div>
+                                            ) : (
+                                                filteredCustomers.map((customer) => (
+                                                    <div
+                                                        key={customer.name}
+                                                        className={cn(
+                                                            "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                                                            form.customerName === customer.name ? "bg-accent/50" : ""
+                                                        )}
+                                                        onClick={() => selectCustomer(customer.name, customer.phone)}
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                "mr-2 h-4 w-4",
+                                                                form.customerName === customer.name ? "opacity-100" : "opacity-0"
+                                                            )}
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium text-foreground">{customer.name}</span>
+                                                            <span className="text-xs text-muted-foreground">{customer.phone}</span>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                        {/* Allow creating a new customer if search doesn't match exactly */}
+                                        {customerSearch && !uniqueCustomers.some(c => c.name.toLowerCase() === customerSearch.toLowerCase()) && (
+                                            <div className="border-t p-1">
+                                                <div
+                                                    className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm text-primary font-medium hover:bg-accent hover:text-accent-foreground"
+                                                    onClick={() => selectCustomer(customerSearch, form.phone)} // Keep phone if they already typed one, otherwise empty
+                                                >
+                                                    Add "{customerSearch}" as new...
+                                                </div>
+                                            </div>
+                                        )}
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                         </div>
 
                         {/* Row 2 — Phone & IMEI */}
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 flex flex-col justify-end">
                                 <Label htmlFor="reg-phone" className="text-xs">Phone</Label>
                                 <Input
                                     id="reg-phone"
@@ -298,7 +391,7 @@ export default function VehiclesView() {
                                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                                 />
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 flex flex-col justify-end">
                                 <Label htmlFor="reg-imei" className="text-xs">IMEI</Label>
                                 <Input
                                     id="reg-imei"
@@ -311,7 +404,7 @@ export default function VehiclesView() {
 
                         {/* Row 3 — Plan & Trakzee Status */}
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 flex flex-col justify-end">
                                 <Label className="text-xs">Plan</Label>
                                 <Select
                                     value={form.plan}
@@ -328,7 +421,7 @@ export default function VehiclesView() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 flex flex-col justify-end">
                                 <Label className="text-xs">Trakzee Status</Label>
                                 <Select
                                     value={form.trakzeeStatus}
@@ -349,7 +442,7 @@ export default function VehiclesView() {
 
                         {/* Row 4 — Installation Date & Expiry Date */}
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 flex flex-col justify-end">
                                 <Label htmlFor="reg-install-date" className="text-xs">Installation Date</Label>
                                 <Input
                                     id="reg-install-date"
@@ -358,7 +451,7 @@ export default function VehiclesView() {
                                     onChange={(e) => setForm({ ...form, installationDate: e.target.value })}
                                 />
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 flex flex-col justify-end">
                                 <Label htmlFor="reg-expiry" className="text-xs">Expiry Date</Label>
                                 <Input
                                     id="reg-expiry"
