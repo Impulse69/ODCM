@@ -132,9 +132,7 @@ export const companies: Company[] = [
     address: "100 Pretoria Ave, Centurion",
     taxId: "TX-889900",
     status: "Active",
-    trakzeeStatus: "Active",
-    plan: "Fleet",
-    monthlyAmount: 499,
+    totalAccounts: 14,
   },
   {
     id: "CO-009",
@@ -189,9 +187,18 @@ export const companies: Company[] = [
     address: "Modimolle Rd, Limpopo",
     taxId: "TX-222324",
     status: "Active",
-    trakzeeStatus: "Active",
-    plan: "Fleet",
-    monthlyAmount: 499,
+    totalAccounts: 4,
+  },
+  {
+    id: "CO-014",
+    companyName: "Dolphin Coast Rentals",
+    billingContactName: "Craig Thompson",
+    contactPhone: "+27 32 900 3344",
+    email: "fleet@dolphin-rentals.co.za",
+    address: "Ballito Junction, KZN",
+    taxId: "TX-252627",
+    status: "Active",
+    totalAccounts: 11,
   },
   {
     id: "CO-015",
@@ -217,91 +224,151 @@ export const kpiData: KPIData = {
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
-let _nextImei = 356938035643809;
-function nextImei(): string {
-  return String(_nextImei++);
-}
-
-let _subIdx = 0;
-function nextSubId(): string {
-  _subIdx++;
-  return `SUB-${String(_subIdx).padStart(3, "0")}`;
-}
-
-const plans = ["Basic", "Standard", "Premium", "Fleet"] as const;
-const planAmounts: Record<string, number> = { Basic: 99, Standard: 199, Premium: 299, Fleet: 499 };
-const trakzeeStatuses: TrakzeeStatus[] = ["Active", "Deactivated"];
-const provinces = ["GP", "WC", "KZN", "EC", "FS", "NW", "LP", "MP", "NC"];
-const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-function randomPlate(): string {
-  const prov = provinces[Math.floor(Math.random() * provinces.length)];
-  const l1 = letters[Math.floor(Math.random() * 26)];
-  const l2 = letters[Math.floor(Math.random() * 26)];
-  const l3 = letters[Math.floor(Math.random() * 26)];
-  const num = String(Math.floor(100 + Math.random() * 900));
-  return `${prov} ${l1}${l2}${l3} ${num}`;
-}
-
-function randomDate(yearStart: number, yearEnd: number): string {
-  const y = yearStart + Math.floor(Math.random() * (yearEnd - yearStart + 1));
-  const m = String(1 + Math.floor(Math.random() * 12)).padStart(2, "0");
-  const d = String(1 + Math.floor(Math.random() * 28)).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function makeVehicle(
-  customerName: string,
-  phone: string,
-  overrides?: Partial<Subscription>,
-): Subscription {
-  const plan = plans[Math.floor(Math.random() * plans.length)];
-  const statusIdx = Math.random();
-  let status: SubscriptionStatus;
-  if (statusIdx < 0.55) status = "Active";
-  else if (statusIdx < 0.75) status = "Due Soon";
-  else if (statusIdx < 0.9) status = "Overdue";
-  else status = "Suspended";
-
-  const trakzee: TrakzeeStatus = status === "Suspended" ? "Deactivated" : trakzeeStatuses[Math.random() < 0.85 ? 0 : 1];
-
-  return {
-    id: nextSubId(),
-    customerName,
-    phone,
-    plateNumber: randomPlate(),
-    imei: nextImei(),
-    expiryDate: randomDate(2025, 2027),
-    installationDate: randomDate(2023, 2025),
-    status,
-    trakzeeStatus: trakzee,
-    plan,
-    monthlyAmount: planAmounts[plan],
-    ...overrides,
-  };
-}
-
-// ─── Individual Customers ────────────────────────────────────────────────────
-
-interface IndividualSeed {
-  name: string;
-  phone: string;
-  vehicleCount: number;
-}
-
-const individualSeeds: IndividualSeed[] = [
-  { name: "Thabo Mokoena", phone: "+27 61 234 5678", vehicleCount: 2 },
-  { name: "Sarah van der Merwe", phone: "+27 82 987 6543", vehicleCount: 1 },
-  { name: "Sipho Ndlovu", phone: "+27 73 456 7890", vehicleCount: 3 },
-  { name: "Fatima Patel", phone: "+27 84 321 0987", vehicleCount: 1 },
-  { name: "Johan Botha", phone: "+27 76 654 3210", vehicleCount: 4 },
-  { name: "Naledi Khumalo", phone: "+27 68 789 0123", vehicleCount: 2 },
-  { name: "David Mthembu", phone: "+27 71 012 3456", vehicleCount: 1 },
-  { name: "Lerato Moloi", phone: "+27 83 345 6789", vehicleCount: 3 },
-  { name: "Pieter Pretorius", phone: "+27 79 678 9012", vehicleCount: 1 },
-  { name: "Zanele Dlamini", phone: "+27 60 901 2345", vehicleCount: 5 },
-  { name: "André Viljoen", phone: "+27 72 234 5670", vehicleCount: 2 },
-  { name: "Busisiwe Nkosi", phone: "+27 65 567 8901", vehicleCount: 1 },
+export const subscriptions: Subscription[] = [
+  {
+    id: "SUB-001",
+    customerName: "Thabo Mokoena",
+    phone: "+27 61 234 5678",
+    plateNumber: "GP ABC 123",
+    imei: "356938035643809",
+    expiryDate: "2026-03-01",
+    status: "Active",
+    trakzeeStatus: "Active",
+    plan: "Premium",
+    monthlyAmount: 299,
+  },
+  {
+    id: "SUB-002",
+    customerName: "Sarah van der Merwe",
+    phone: "+27 82 987 6543",
+    plateNumber: "WC DEF 456",
+    imei: "356938035643810",
+    expiryDate: "2026-02-28",
+    status: "Due Soon",
+    trakzeeStatus: "Active",
+    plan: "Standard",
+    monthlyAmount: 199,
+  },
+  {
+    id: "SUB-003",
+    customerName: "Sipho Ndlovu",
+    phone: "+27 73 456 7890",
+    plateNumber: "KZN GHI 789",
+    imei: "356938035643811",
+    expiryDate: "2026-02-20",
+    status: "Overdue",
+    trakzeeStatus: "Active",
+    plan: "Basic",
+    monthlyAmount: 99,
+  },
+  {
+    id: "SUB-004",
+    customerName: "Fatima Patel",
+    phone: "+27 84 321 0987",
+    plateNumber: "GP JKL 012",
+    imei: "356938035643812",
+    expiryDate: "2026-01-15",
+    status: "Suspended",
+    trakzeeStatus: "Deactivated",
+    plan: "Premium",
+    monthlyAmount: 299,
+  },
+  {
+    id: "SUB-005",
+    customerName: "Johan Botha",
+    phone: "+27 76 654 3210",
+    plateNumber: "FS MNO 345",
+    imei: "356938035643813",
+    expiryDate: "2026-03-15",
+    status: "Active",
+    trakzeeStatus: "Active",
+    plan: "Premium",
+    monthlyAmount: 299,
+  },
+  {
+    id: "SUB-006",
+    customerName: "Naledi Khumalo",
+    phone: "+27 68 789 0123",
+    plateNumber: "GP PQR 678",
+    imei: "356938035643814",
+    expiryDate: "2026-02-26",
+    status: "Due Soon",
+    trakzeeStatus: "Active",
+    plan: "Standard",
+    monthlyAmount: 199,
+  },
+  {
+    id: "SUB-007",
+    customerName: "David Mthembu",
+    phone: "+27 71 012 3456",
+    plateNumber: "EC STU 901",
+    imei: "356938035643815",
+    expiryDate: "2026-02-10",
+    status: "Overdue",
+    trakzeeStatus: "Active",
+    plan: "Basic",
+    monthlyAmount: 99,
+  },
+  {
+    id: "SUB-008",
+    customerName: "Lerato Moloi",
+    phone: "+27 83 345 6789",
+    plateNumber: "NW VWX 234",
+    imei: "356938035643816",
+    expiryDate: "2026-04-01",
+    status: "Active",
+    trakzeeStatus: "Active",
+    plan: "Premium",
+    monthlyAmount: 299,
+  },
+  {
+    id: "SUB-009",
+    customerName: "Pieter Pretorius",
+    phone: "+27 79 678 9012",
+    plateNumber: "LP YZA 567",
+    imei: "356938035643817",
+    expiryDate: "2026-01-28",
+    status: "Suspended",
+    trakzeeStatus: "Deactivated",
+    plan: "Standard",
+    monthlyAmount: 199,
+  },
+  {
+    id: "SUB-010",
+    customerName: "Zanele Dlamini",
+    phone: "+27 60 901 2345",
+    plateNumber: "MP BCD 890",
+    imei: "356938035643818",
+    expiryDate: "2026-03-10",
+    status: "Active",
+    trakzeeStatus: "Active",
+    plan: "Premium",
+    monthlyAmount: 299,
+  },
+  {
+    id: "SUB-011",
+    customerName: "André Viljoen",
+    phone: "+27 72 234 5670",
+    plateNumber: "GP EFG 123",
+    imei: "356938035643819",
+    expiryDate: "2026-02-27",
+    status: "Due Soon",
+    trakzeeStatus: "Active",
+    plan: "Premium",
+    monthlyAmount: 299,
+  },
+  {
+    id: "SUB-012",
+    customerName: "Busisiwe Nkosi",
+    phone: "+27 65 567 8901",
+    plateNumber: "KZN HIJ 456",
+    imei: "356938035643820",
+    expiryDate: "2026-02-18",
+    status: "Overdue",
+    trakzeeStatus: "Active",
+    plan: "Basic",
+    monthlyAmount: 99,
+  },
 ];
 
 // ─── Company vehicle counts (1 – 20) ────────────────────────────────────────
@@ -378,7 +445,7 @@ export const mockCSVData: CSVRow[] = [
     clientName: "Tshidi Mabaso",
     phone: "+27 73 555 6666",
     vehicleIMEI: "356938035643823",
-    plan: "Fleet",
+    plan: "Premium",
     expiryDate: "2026-04-20",
   },
   {
