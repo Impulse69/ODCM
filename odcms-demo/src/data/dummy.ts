@@ -309,7 +309,6 @@ const individualSeeds: IndividualSeed[] = [
   { name: "Zanele Dlamini", phone: "+27 60 901 2345", vehicleCount: 5 },
   { name: "André Viljoen", phone: "+27 72 234 5670", vehicleCount: 2 },
   { name: "Busisiwe Nkosi", phone: "+27 65 567 8901", vehicleCount: 1 },
-];
 
 // ─── Company vehicle counts (1 – 20) ────────────────────────────────────────
 
