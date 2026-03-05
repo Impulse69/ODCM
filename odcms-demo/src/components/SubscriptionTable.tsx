@@ -52,7 +52,6 @@ const planColors: Record<string, string> = {
     Basic: "bg-zinc-100 text-zinc-600 border-zinc-200",
     Standard: "bg-[#FFF5EC] text-[#C9651B] border-orange-200",
     Premium: "bg-violet-50 text-violet-700 border-violet-200",
-    Fleet: "bg-sky-50 text-sky-700 border-sky-200",
 };
 
 type SortField = "customerName" | "expiryDate" | "status" | "plan";

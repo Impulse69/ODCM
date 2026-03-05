@@ -100,8 +100,8 @@ export const subscriptions: Subscription[] = [
     expiryDate: "2026-03-15",
     status: "Active",
     trakzeeStatus: "Active",
-    plan: "Fleet",
-    monthlyAmount: 499,
+    plan: "Premium",
+    monthlyAmount: 299,
   },
   {
     id: "SUB-006",
@@ -160,8 +160,8 @@ export const subscriptions: Subscription[] = [
     expiryDate: "2026-03-10",
     status: "Active",
     trakzeeStatus: "Active",
-    plan: "Fleet",
-    monthlyAmount: 499,
+    plan: "Premium",
+    monthlyAmount: 299,
   },
   {
     id: "SUB-011",
@@ -210,7 +210,7 @@ export const mockCSVData: CSVRow[] = [
     clientName: "Tshidi Mabaso",
     phone: "+27 73 555 6666",
     vehicleIMEI: "356938035643823",
-    plan: "Fleet",
+    plan: "Premium",
     expiryDate: "2026-04-20",
   },
   {
