@@ -13,45 +13,47 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 
-type CustomerPayload = {
-  clientName: string
+type CompanyPayload = {
+  companyName: string
   contactPerson: string
   telephone: string
   email: string
   address: string
   city: string
   postalCode: string
+  taxId: string
 }
 
-type CustomerRecord = CustomerPayload & {
+type CompanyRecord = CompanyPayload & {
   id: string
   createdAt: string
 }
 
-export default function AddCustomerForm({ onCreated }: { onCreated?: (d: CustomerRecord) => void }) {
-  const form = useForm<CustomerPayload>({
+export default function AddCompanyForm({ onCreated }: { onCreated?: (d: CompanyRecord) => void }) {
+  const form = useForm<CompanyPayload>({
     defaultValues: {
-      clientName: "",
+      companyName: "",
       contactPerson: "",
       telephone: "",
       email: "",
       address: "",
       city: "",
       postalCode: "",
+      taxId: "",
     },
   })
 
   const [submitting, setSubmitting] = useState(false)
   const idCounter = useRef(1)
 
-  const onSubmit = (values: CustomerPayload) => {
+  const onSubmit = (values: CompanyPayload) => {
     setSubmitting(true)
-    const record: CustomerRecord = {
-      id: `CUST-${idCounter.current++}`,
+    const record: CompanyRecord = {
+      id: `CO-${idCounter.current++}`,
       createdAt: new Date().toISOString(),
       ...values,
     }
-    console.log("AddCustomerForm submit:", record)
+    console.log("AddCompanyForm submit:", record)
     onCreated?.(record)
     setTimeout(() => {
       setSubmitting(false)
@@ -62,21 +64,22 @@ export default function AddCustomerForm({ onCreated }: { onCreated?: (d: Custome
   return (
     <Form {...form}>
       <form onSubmit={(e) => form.handleSubmit(onSubmit)(e)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="companyName"
+          rules={{ required: "Company name is required" }}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Company Name</FormLabel>
+              <FormControl>
+                <Input {...field} value={field.value ?? ""} placeholder="Company Ltd" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField
-            control={form.control}
-            name="clientName"
-            rules={{ required: "Client name is required" }}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Client Name</FormLabel>
-                <FormControl>
-                  <Input {...field} value={field.value ?? ""} placeholder="Full name" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
           <FormField
             control={form.control}
             name="contactPerson"
@@ -84,15 +87,12 @@ export default function AddCustomerForm({ onCreated }: { onCreated?: (d: Custome
               <FormItem>
                 <FormLabel>Contact Person</FormLabel>
                 <FormControl>
-                  <Input {...field} value={field.value ?? ""} placeholder="Contact person" />
+                  <Input {...field} value={field.value ?? ""} placeholder="Full name" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField
             control={form.control}
             name="telephone"
@@ -107,6 +107,9 @@ export default function AddCustomerForm({ onCreated }: { onCreated?: (d: Custome
               </FormItem>
             )}
           />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField
             control={form.control}
             name="email"
@@ -114,7 +117,20 @@ export default function AddCustomerForm({ onCreated }: { onCreated?: (d: Custome
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input {...field} value={field.value ?? ""} placeholder="name@example.com" />
+                  <Input {...field} value={field.value ?? ""} placeholder="accounts@company.com" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="taxId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tax / VAT ID</FormLabel>
+                <FormControl>
+                  <Input {...field} value={field.value ?? ""} placeholder="TX-000000" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -167,7 +183,7 @@ export default function AddCustomerForm({ onCreated }: { onCreated?: (d: Custome
 
         <div className="flex items-center justify-end gap-2 pt-2">
           <Button type="submit" className="gap-2" disabled={submitting}>
-            {submitting ? "Saving…" : "Create Individual"}
+            {submitting ? "Saving…" : "Create Company"}
           </Button>
         </div>
       </form>
