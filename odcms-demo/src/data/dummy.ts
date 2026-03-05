@@ -235,8 +235,8 @@ function nextSubId(): string {
   return `SUB-${String(_subIdx).padStart(3, "0")}`;
 }
 
-const plans = ["Basic", "Standard", "Premium", "Fleet"] as const;
-const planAmounts: Record<string, number> = { Basic: 99, Standard: 199, Premium: 299, Fleet: 499 };
+const plans = ["Basic", "Standard", "Premium"] as const;
+const planAmounts: Record<string, number> = { Basic: 60, Standard: 100, Premium: 300 };
 const trakzeeStatuses: TrakzeeStatus[] = ["Active", "Deactivated"];
 const provinces = ["GP", "WC", "KZN", "EC", "FS", "NW", "LP", "MP", "NC"];
 const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -309,6 +309,7 @@ const individualSeeds: IndividualSeed[] = [
   { name: "Zanele Dlamini", phone: "+27 60 901 2345", vehicleCount: 5 },
   { name: "André Viljoen", phone: "+27 72 234 5670", vehicleCount: 2 },
   { name: "Busisiwe Nkosi", phone: "+27 65 567 8901", vehicleCount: 1 },
+];
 
 // ─── Company vehicle counts (1 – 20) ────────────────────────────────────────
 
