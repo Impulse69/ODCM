@@ -18,62 +18,12 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { subscriptions, companies } from "@/data/dummy";
+import { subscriptions as initialSubscriptions, companies as initialCompanies } from "@/data/dummy";
 import { cn } from "@/lib/utils";
 
-// Derive individual customers from subscriptions — aggregate multi-vehicle owners
-const customers = Array.from(
-    subscriptions
-        .filter((sub) => !companies.some((co) => co.companyName === sub.customerName))
-        .reduce((map, sub) => {
-            const existing = map.get(sub.customerName);
-            if (existing) {
-                existing.vehicles += 1;
-                existing.totalMonthly += sub.monthlyAmount;
-                // keep worst status
-                const priority: Record<string, number> = { Suspended: 0, Overdue: 1, "Due Soon": 2, Active: 3 };
-                if ((priority[sub.status] ?? 3) < (priority[existing.status] ?? 3)) {
-                    existing.status = sub.status;
-                }
-            } else {
-                map.set(sub.customerName, {
-                    id: sub.id,
-                    name: sub.customerName,
-                    phone: sub.phone,
-                    vehicles: 1,
-                    plan: sub.plan,
-                    status: sub.status,
-                    initials: sub.customerName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
-                    totalMonthly: sub.monthlyAmount,
-                });
-            }
-            return map;
-        }, new Map<string, {
-            id: string; name: string; phone: string; vehicles: number; plan: string;
-            status: string; initials: string; totalMonthly: number;
-        }>())
-).map(([, v]) => v);
+// We'll keep local state for subscriptions and companies so newly added records show up immediately.
 
-// Derive company vehicle counts from subscriptions
-const companyRows = companies.map((co) => {
-    const coVehicles = subscriptions.filter((s) => s.customerName === co.companyName);
-    const vehicleCount = coVehicles.length;
-    const totalMonthly = coVehicles.reduce((sum, v) => sum + v.monthlyAmount, 0);
-    // derive worst status across fleet
-    const priority: Record<string, number> = { Suspended: 0, Overdue: 1, "Due Soon": 2, Active: 3 };
-    let worstStatus = co.status ?? "Active";
-    for (const v of coVehicles) {
-        if ((priority[v.status] ?? 3) < (priority[worstStatus] ?? 3)) {
-            worstStatus = v.status;
-        }
-    }
-    // Minimal override: consider a company "Active" if it has at least 7 active vehicles.
-    const activeCount = coVehicles.filter((v) => v.status === "Active").length;
-    if (activeCount >= 7) {
-        worstStatus = "Active";
-    }
-    return { ...co, vehicleCount, totalMonthly, derivedStatus: worstStatus };
-});
+// We'll keep local state for subscriptions and companies so newly added records show up immediately.
 
 const statusColors: Record<string, string> = {
     Active: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -91,10 +41,66 @@ const avatarColors = [
 ];
 
 export default function CustomersView() {
+    const [localSubscriptions, setLocalSubscriptions] = useState(initialSubscriptions);
+    const [localCompanies, setLocalCompanies] = useState(initialCompanies);
+
     const [search, setSearch] = useState("");
     const [tab, setTab] = useState<"individuals" | "companies">("individuals")
     const [selectedIndividual, setSelectedIndividual] = useState<string | null>(null)
     const [selectedCompany, setSelectedCompany] = useState<string | null>(null)
+
+    const customers = useMemo(() => {
+        return Array.from(
+            localSubscriptions
+                .filter((sub) => !localCompanies.some((co) => co.companyName === sub.customerName))
+                .reduce((map, sub) => {
+                    const existing = map.get(sub.customerName);
+                    if (existing) {
+                        existing.vehicles += 1;
+                        existing.totalMonthly += sub.monthlyAmount;
+                        const priority: Record<string, number> = { Suspended: 0, Overdue: 1, "Due Soon": 2, Active: 3 };
+                        if ((priority[sub.status] ?? 3) < (priority[existing.status] ?? 3)) {
+                            existing.status = sub.status;
+                        }
+                    } else {
+                        map.set(sub.customerName, {
+                            id: sub.id,
+                            name: sub.customerName,
+                            phone: sub.phone,
+                            vehicles: 1,
+                            plan: sub.plan,
+                            status: sub.status,
+                            initials: sub.customerName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
+                            totalMonthly: sub.monthlyAmount,
+                        });
+                    }
+                    return map;
+                }, new Map<string, {
+                    id: string; name: string; phone: string; vehicles: number; plan: string;
+                    status: string; initials: string; totalMonthly: number;
+                }>() )
+        ).map(([, v]) => v);
+    }, [localSubscriptions, localCompanies]);
+
+    const companyRows = useMemo(() => localCompanies.map((co) => {
+        const coVehicles = localSubscriptions.filter((s) => s.customerName === co.companyName);
+        const vehicleCount = coVehicles.length;
+        const totalMonthly = coVehicles.reduce((sum, v) => sum + v.monthlyAmount, 0);
+        // derive worst status across fleet
+        const priority: Record<string, number> = { Suspended: 0, Overdue: 1, "Due Soon": 2, Active: 3 };
+        let worstStatus = co.status ?? "Active";
+        for (const v of coVehicles) {
+            if ((priority[v.status] ?? 3) < (priority[worstStatus] ?? 3)) {
+                worstStatus = v.status;
+            }
+        }
+        // Minimal override: consider a company "Active" if it has at least 7 active vehicles.
+        const activeCount = coVehicles.filter((v) => v.status === "Active").length;
+        if (activeCount >= 7) {
+            worstStatus = "Active";
+        }
+        return { ...co, vehicleCount, totalMonthly, derivedStatus: worstStatus };
+    }), [localCompanies, localSubscriptions]);
 
     const filteredIndividuals = useMemo(
         () =>
@@ -104,7 +110,7 @@ export default function CustomersView() {
                     c.name.toLowerCase().includes(search.toLowerCase()) ||
                     c.phone.includes(search)
             ),
-        [search]
+        [search, customers]
     );
 
     const filteredCompanies = useMemo(
@@ -116,8 +122,41 @@ export default function CustomersView() {
                     (co.contactPhone ?? "").includes(search) ||
                     (co.billingContactName ?? "").toLowerCase().includes(search.toLowerCase())
             ),
-        [search]
+        [search, companyRows]
     );
+
+    // Handlers for Add forms
+    const handleAddCompany = (rec: any) => {
+        setLocalCompanies((prev) => [{
+            id: rec.id,
+            companyName: rec.companyName,
+            billingContactName: rec.contactPerson,
+            contactPhone: rec.telephone,
+            email: rec.email,
+            address: rec.address,
+            taxId: rec.taxId,
+            status: 'Active',
+            totalAccounts: 0,
+        }, ...prev]);
+    };
+
+    const handleAddIndividual = (rec: any) => {
+        // Create a lightweight subscription so the individual shows in the list
+        const newSub = {
+            id: `SUB-${Date.now()}`,
+            customerName: rec.clientName,
+            phone: rec.telephone,
+            plateNumber: "-",
+            imei: "",
+            expiryDate: new Date().toISOString().slice(0,10),
+            installationDate: new Date().toISOString().slice(0,10),
+            status: "Active",
+            trakzeeStatus: "Active",
+            plan: "Basic",
+            monthlyAmount: 0,
+        } as any;
+        setLocalSubscriptions((prev) => [newSub, ...prev]);
+    };
 
     return (
         <div className="space-y-5 animate-fade-in-up" style={{ opacity: 0 }}>
@@ -157,9 +196,9 @@ export default function CustomersView() {
                                 <DialogTitle>{tab === "individuals" ? "Add Individual" : "Add Company"}</DialogTitle>
                             </DialogHeader>
                             {tab === "individuals" ? (
-                                <AddCustomerForm onCreated={() => { }} />
+                                <AddCustomerForm onCreated={(d) => { handleAddIndividual(d); }} />
                             ) : (
-                                <AddCompanyForm onCreated={() => { }} />
+                                <AddCompanyForm onCreated={(d) => { handleAddCompany(d); }} />
                             )}
                         </DialogContent>
                     </Dialog>
