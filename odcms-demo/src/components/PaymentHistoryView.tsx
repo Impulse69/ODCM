@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { PAYMENT_HISTORY_KEY, type PaymentRecord } from "@/lib/payment-history";
+import { getPayments, PAYMENT_HISTORY_KEY, type PaymentRecord } from "@/lib/payment-history";
 
 const PAGE_SIZE = 12;
 
@@ -22,14 +22,22 @@ export default function PaymentHistoryView() {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
 
-    // Load from localStorage on mount (and listen for updates)
+    // Load from backend API; also keep localStorage in sync
     useEffect(() => {
-        const load = () => {
+        const load = async () => {
             try {
-                const raw = localStorage.getItem(PAYMENT_HISTORY_KEY);
-                setRecords(raw ? (JSON.parse(raw) as PaymentRecord[]) : []);
+                const data = await getPayments();
+                setRecords(data);
+                // Overwrite localStorage with the authoritative backend data
+                localStorage.setItem(PAYMENT_HISTORY_KEY, JSON.stringify(data));
             } catch {
-                setRecords([]);
+                // offline fallback
+                try {
+                    const raw = localStorage.getItem(PAYMENT_HISTORY_KEY);
+                    setRecords(raw ? (JSON.parse(raw) as PaymentRecord[]) : []);
+                } catch {
+                    setRecords([]);
+                }
             }
         };
         load();

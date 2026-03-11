@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useInView } from "@/lib/hooks";
 import { getRevenueSummary } from "@/lib/payment-history";
-import { Loader2 } from "lucide-react";
 
 const CHART_LEFT = 48;
 const CHART_RIGHT = 590;
@@ -149,13 +148,35 @@ export default function RevenueChart() {
                 </div>
             </CardHeader>
             <CardContent className="pt-5 pb-5 px-5">
-                {loading ? (
-                    <div className="flex items-center justify-center" style={{ height: 230 }}>
-                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                    </div>
-                ) : data.length === 0 ? (
-                    <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height: 230 }}>
-                        No payment data yet
+                {loading || data.length === 0 ? (
+                    /* Skeleton chart — shown while loading OR when there is no data yet */
+                    <div style={{ height: 230 }} className="w-full relative overflow-hidden">
+                        <svg viewBox="0 0 640 230" className="w-full" style={{ height: 230 }}>
+                            {/* Skeleton grid lines */}
+                            {[0.25, 0.5, 0.75, 1].map((frac) => {
+                                const y = CHART_BOTTOM - frac * (CHART_BOTTOM - CHART_TOP);
+                                return (
+                                    <g key={frac}>
+                                        <line x1={CHART_LEFT} y1={y} x2={CHART_RIGHT} y2={y} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4 3" />
+                                        <rect x={0} y={y - 5} width={36} height={10} rx={3} fill="#e5e7eb" className="animate-pulse" />
+                                    </g>
+                                );
+                            })}
+                            <line x1={CHART_LEFT} y1={CHART_BOTTOM} x2={CHART_RIGHT} y2={CHART_BOTTOM} stroke="#e5e7eb" strokeWidth="1" />
+                            <rect x={0} y={CHART_BOTTOM - 5} width={36} height={10} rx={3} fill="#e5e7eb" className="animate-pulse" />
+
+                            {/* Skeleton wavy line as a flat pulse bar */}
+                            <rect x={CHART_LEFT} y={CHART_BOTTOM - 6} width={CHART_RIGHT - CHART_LEFT} height={6} rx={3} fill="#e5e7eb" className="animate-pulse" />
+
+                            {/* Skeleton gradient area */}
+                            <rect x={CHART_LEFT} y={CHART_TOP + 40} width={CHART_RIGHT - CHART_LEFT} height={CHART_BOTTOM - CHART_TOP - 40} rx={4} fill="#f3f4f6" className="animate-pulse" />
+
+                            {/* Skeleton x-axis labels */}
+                            {Array.from({ length: 6 }).map((_, i) => {
+                                const x = CHART_LEFT + (i / 5) * (CHART_RIGHT - CHART_LEFT) - 14;
+                                return <rect key={i} x={x} y={CHART_BOTTOM + 8} width={28} height={8} rx={3} fill="#e5e7eb" className="animate-pulse" />;
+                            })}
+                        </svg>
                     </div>
                 ) : (
                     <svg viewBox="0 0 640 230" className="w-full" style={{ height: 230 }}>

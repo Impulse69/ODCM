@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import Sidebar from "@/components/Sidebar";
@@ -28,6 +28,19 @@ export default function DashboardPage() {
   const router = useRouter();
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // On mount, restore the active section from the URL (?section=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get("section");
+    if (s) setActiveSection(s);
+  }, []);
+
+  // Navigate: update state AND URL so refresh lands on the same section
+  const handleNavigate = useCallback((section: string) => {
+    setActiveSection(section);
+    router.replace(`/?section=${section}`, { scroll: false });
+  }, [router]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -58,11 +71,7 @@ export default function DashboardPage() {
       {/* Sidebar */}
       <Sidebar
         activeSection={activeSection}
-        onNavigate={(section) => {
-          setActiveSection(section);
-          // detect sidebar collapse state via MutationObserver approach is complex;
-          // instead derive from sidebar DOM width  — simplify by passing a callback
-        }}
+        onNavigate={handleNavigate}
       />
 
       {/* Main area */}
@@ -72,7 +81,7 @@ export default function DashboardPage() {
       >
         {/* Top Nav */}
         <TopNav
-          onNavigate={setActiveSection}
+          onNavigate={handleNavigate}
           sidebarWidth={sidebarWidth}
         />
 
