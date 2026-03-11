@@ -12,9 +12,13 @@ import CustomersView from "@/components/CustomersView";
 import VehiclesView from "@/components/VehiclesView";
 import SubscriptionsView from "@/components/SubscriptionsView";
 import RemovedView from "@/components/RemovedView";
+import PaymentHistoryView from "@/components/PaymentHistoryView";
 import ProfileView from "@/components/ProfileView";
 import SettingsView from "@/components/SettingsView";
-import { Activity, Clock, Loader2 } from "lucide-react";
+import RevenueChart from "@/components/RevenueChart";
+import CustomerSegments from "@/components/CustomerSegments";
+import { Card, CardContent } from "@/components/ui/card";
+import { Activity, Loader2 } from "lucide-react";
 
 const SIDEBAR_COLLAPSED_WIDTH = 68;
 const SIDEBAR_EXPANDED_WIDTH = 240;
@@ -36,8 +40,6 @@ export default function DashboardPage() {
   const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
 
   const now = new Date();
-  const timeString = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  const dateString = now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   // Show loading state while checking auth
   if (isLoading || !isAuthenticated) {
@@ -79,26 +81,26 @@ export default function DashboardPage() {
           {/* ── Dashboard ──────────────────────────────────────────────────── */}
           {activeSection === "dashboard" && (
             <div className="space-y-6">
-              {/* Welcome header */}
-              <div className="flex items-start justify-between flex-wrap gap-3">
-                <div>
+              {/* Welcome header card */}
+              <Card className="border border-border shadow-sm overflow-hidden">
+                <CardContent className="p-6">
                   <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
                     Dashboard Overview
                   </h1>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-sm text-muted-foreground mt-1">
                     Welcome back, Admin. Here&apos;s your billing &amp; compliance summary.
                   </p>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg border border-border">
-                  <Clock size={13} />
-                  <span className="font-medium">{timeString}</span>
-                  <span>·</span>
-                  <span>{dateString}</span>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
 
               {/* KPIs */}
               <KPICards />
+
+              {/* Charts and Segments */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <RevenueChart />
+                <CustomerSegments />
+              </div>
 
               {/* Subscription table */}
               <SubscriptionTable />
@@ -116,7 +118,8 @@ export default function DashboardPage() {
 
           {/* ── Removed List ───────────────────────────────────────────────── */}
           {activeSection === "removed" && <RemovedView />}
-
+          {/* ── Payment History ────────────────────────────────────────────────── */}
+          {activeSection === "payment-history" && <PaymentHistoryView />}
           {/* ── Bulk Import ────────────────────────────────────────────────── */}
           {activeSection === "bulk-import" && (
             <div className="space-y-5">

@@ -6,6 +6,11 @@ export const metadata: Metadata = {
   title: "ODCMS — Office Data Client Management System",
   description:
     "Master Authority dashboard for billing management and vehicle tracking compliance. Manage subscriptions, track vehicles, and prevent revenue leakage.",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
+  },
 };
 
 export default function RootLayout({

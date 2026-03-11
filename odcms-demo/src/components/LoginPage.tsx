@@ -33,13 +33,13 @@ export default function LoginPage() {
       {/* ── Left hero panel ── */}
       <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden bg-odg-navy">
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-odg-navy via-odg-navy-mid to-[#0a1520]" />
+        <div className="absolute inset-0 bg-linear-to-br from-odg-navy via-odg-navy-mid to-[#0a1520]" />
 
         {/* Decorative geometric shapes */}
-        <div className="absolute top-[-8%] right-[-12%] w-[500px] h-[500px] rounded-full bg-odg-orange/[0.06] blur-3xl" />
-        <div className="absolute bottom-[-10%] left-[-8%] w-[400px] h-[400px] rounded-full bg-odg-orange/[0.04] blur-3xl" />
-        <div className="absolute top-[30%] left-[20%] w-64 h-64 border border-white/[0.04] rounded-2xl rotate-12" />
-        <div className="absolute bottom-[20%] right-[15%] w-48 h-48 border border-odg-orange/[0.08] rounded-full" />
+        <div className="absolute top-[-8%] right-[-12%] w-125 h-125 rounded-full bg-odg-orange/6 blur-3xl" />
+        <div className="absolute bottom-[-10%] left-[-8%] w-100 h-100 rounded-full bg-odg-orange/4 blur-3xl" />
+        <div className="absolute top-[30%] left-[20%] w-64 h-64 border border-white/4 rounded-2xl rotate-12" />
+        <div className="absolute bottom-[20%] right-[15%] w-48 h-48 border border-odg-orange/8 rounded-full" />
 
         {/* Pattern dots grid */}
         <div
@@ -54,7 +54,7 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-odg-orange to-odg-orange-dark flex items-center justify-center shadow-lg shadow-orange-900/40">
+            <div className="w-11 h-11 rounded-xl bg-linear-to-br from-odg-orange to-odg-orange-dark flex items-center justify-center shadow-lg shadow-orange-900/40">
               <Activity size={22} className="text-white" />
             </div>
             <div>
@@ -83,7 +83,7 @@ export default function LoginPage() {
               {["Subscription Tracking", "Vehicle Compliance", "Bulk Import", "Revenue Analytics"].map((feat) => (
                 <span
                   key={feat}
-                  className="text-[0.65rem] font-medium text-white/60 bg-white/[0.06] border border-white/[0.08] px-3 py-1.5 rounded-full"
+                  className="text-[0.65rem] font-medium text-white/60 bg-white/6 border border-white/8 px-3 py-1.5 rounded-full"
                 >
                   {feat}
                 </span>
@@ -100,10 +100,10 @@ export default function LoginPage() {
 
       {/* ── Right login form ── */}
       <div className="flex-1 flex items-center justify-center bg-background px-6 py-12">
-        <div className="w-full max-w-[400px] space-y-8">
+          <div className="w-full max-w-100 space-y-8">
           {/* Mobile logo (shown below lg) */}
           <div className="lg:hidden flex items-center gap-3 justify-center mb-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-odg-orange to-odg-orange-dark flex items-center justify-center shadow-lg shadow-orange-900/30">
+            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-odg-orange to-odg-orange-dark flex items-center justify-center shadow-lg shadow-orange-900/30">
               <Activity size={20} className="text-white" />
             </div>
             <div>
@@ -202,7 +202,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-gradient-to-r from-odg-orange to-odg-orange-dark text-white font-semibold text-sm shadow-lg shadow-orange-900/25 hover:shadow-orange-900/40 hover:brightness-110 active:brightness-95 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-linear-to-r from-odg-orange to-odg-orange-dark text-white font-semibold text-sm shadow-lg shadow-orange-900/25 hover:shadow-orange-900/40 hover:brightness-110 active:brightness-95 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200"
             >
               {isSubmitting ? (
                 <>
@@ -215,31 +215,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-background px-3 text-xs text-muted-foreground">Demo Credentials</span>
-            </div>
-          </div>
-
-          {/* Demo credentials hint */}
-          <div className="rounded-lg bg-muted/50 border border-border p-4 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Email</span>
-              <code className="font-mono text-foreground bg-card px-2 py-0.5 rounded border border-border text-[0.7rem]">
-                admin@odg.com.gh
-              </code>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Password</span>
-              <code className="font-mono text-foreground bg-card px-2 py-0.5 rounded border border-border text-[0.7rem]">
-                admin123
-              </code>
-            </div>
-          </div>
         </div>
       </div>
     </div>

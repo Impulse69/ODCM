@@ -1,34 +1,26 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Search,
-  Car,
   Wifi,
   WifiOff,
   MoreHorizontal,
   Check,
   ChevronsUpDown,
+  Loader2,
+  AlertCircle,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  CreditCard,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,21 +47,56 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  subscriptions as initialSubscriptions,
-  type Subscription,
-} from "@/data/dummy";
+import { getVehicles, addVehicle, updateTrakzee, updateVehicleExpiry, deleteVehicle, type Vehicle } from "@/lib/vehicles-api";
+import { getIndividuals, getCompanies, type IndividualCustomer, type Company } from "@/lib/customers-api";
+import { savePayment } from "@/lib/payment-history";
 import { cn } from "@/lib/utils";
 
-const PLAN_AMOUNTS: Record<string, number> = {
-  Basic: 60,
-  Standard: 100,
-  Premium: 300,
+// ── Compute display status from expiry date ──────────────────────────────────
+/** Convert any date string (ISO timestamp or YYYY-MM-DD) to plain YYYY-MM-DD */
+function toDateStr(raw: string): string {
+  return raw.slice(0, 10); // "2026-03-15T00:00:00.000Z" → "2026-03-15"
+}
+
+function addMonths(dateStr: string, months: number): string {
+  const clean = toDateStr(dateStr);
+  const [y, m, d] = clean.split("-").map(Number);
+  const date = new Date(y, m - 1 + months, d);
+  if (date.getDate() !== d) date.setDate(0); // clamp to last day of month
+  const ny = date.getFullYear();
+  const nm = String(date.getMonth() + 1).padStart(2, "0");
+  const nd = String(date.getDate()).padStart(2, "0");
+  return `${ny}-${nm}-${nd}`;
+}
+
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function computeStatus(expiryDate: string, backendStatus: string): string {
+  if (backendStatus === "Suspended") return "Suspended";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(expiryDate);
+  if (expiry < today) return "Expired";
+  const twoWeeks = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+  if (expiry <= twoWeeks) return "Due Soon";
+  return "Active";
+}
+
+type OwnerOption = {
+  id: string;
+  name: string;
+  phone: string;
+  type: "individual" | "company";
 };
 
 const emptyForm = {
   plateNumber: "",
-  customerName: "",
+  ownerId: "",
+  ownerName: "",
+  ownerType: "" as "" | "individual" | "company",
   phone: "",
   imei: "",
   plan: "",
@@ -80,443 +107,541 @@ const emptyForm = {
 
 export default function VehiclesView() {
   const [search, setSearch] = useState("");
-  const [vehicleList, setVehicleList] =
-    useState<Subscription[]>(initialSubscriptions);
+  const [vehicleList, setVehicleList] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  // Popover state
+  // Owner dropdown
+  const [owners, setOwners] = useState<OwnerOption[]>([]);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
 
+  // ── Fetch vehicles ──────────────────────────────────────────────────────────
+  const fetchVehicles = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getVehicles();
+      setVehicleList(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load vehicles.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ── Fetch owners for dropdown ───────────────────────────────────────────────
+  const fetchOwners = useCallback(async () => {
+    try {
+      const [inds, cos] = await Promise.all([getIndividuals(), getCompanies()]);
+      const options: OwnerOption[] = [
+        ...inds.map((c: IndividualCustomer) => ({ id: c.id, name: c.name, phone: c.phone, type: "individual" as const })),
+        ...cos.map((c: Company) => ({ id: c.id, name: c.company_name, phone: c.contact_phone ?? "", type: "company" as const })),
+      ];
+      setOwners(options);
+    } catch {
+      // non-critical — dropdown just stays empty
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchVehicles();
+    fetchOwners();
+  }, [fetchVehicles, fetchOwners]);
+
+  // ── Derived ─────────────────────────────────────────────────────────────────
   const vehicles = useMemo(
     () =>
       vehicleList.filter(
         (s) =>
           !search ||
-          s.plateNumber.toLowerCase().includes(search.toLowerCase()) ||
+          s.plate_number.toLowerCase().includes(search.toLowerCase()) ||
           s.imei.includes(search) ||
-          s.customerName.toLowerCase().includes(search.toLowerCase()),
+          s.customer_name.toLowerCase().includes(search.toLowerCase()),
       ),
     [search, vehicleList],
   );
 
-  // Derive unique customers from the current vehicleList
-  const uniqueCustomers = useMemo(() => {
-    const map = new Map<string, { name: string; phone: string }>();
-    vehicleList.forEach((sub) => {
-      if (!map.has(sub.customerName)) {
-        map.set(sub.customerName, { name: sub.customerName, phone: sub.phone });
-      }
-    });
-    return Array.from(map.values());
-  }, [vehicleList]);
+  const filteredOwners = useMemo(
+    () =>
+      owners.filter(
+        (o) =>
+          o.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+          o.phone.includes(customerSearch),
+      ),
+    [owners, customerSearch],
+  );
 
-  const filteredCustomers = useMemo(() => {
-    return uniqueCustomers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.phone.includes(customerSearch),
-    );
-  }, [uniqueCustomers, customerSearch]);
+  const syncedCount   = vehicleList.filter((s) => s.trakzee_status === "Active").length;
+  const desyncedCount = vehicleList.filter((s) => s.trakzee_status === "Deactivated").length;
+  const expiredCount  = vehicleList.filter((s) => computeStatus(s.expiry_date, s.status) === "Expired").length;
 
-  const syncedCount = vehicleList.filter(
-    (s) => s.trakzeeStatus === "Active",
-  ).length;
-  const desyncedCount = vehicleList.filter(
-    (s) => s.trakzeeStatus === "Deactivated",
-  ).length;
-
+  // ── Handlers ─────────────────────────────────────────────────────────────────
   const handleOpenForm = () => {
     setForm(emptyForm);
     setCustomerSearch("");
+    setSaveError(null);
     setShowForm(true);
   };
 
-  const handleSave = () => {
-    // Basic validation — all fields required
+  const handleSave = async () => {
     if (
-      !form.plateNumber ||
-      !form.customerName ||
-      !form.phone ||
-      !form.imei ||
-      !form.plan ||
-      !form.trakzeeStatus ||
-      !form.installationDate ||
-      !form.expiryDate
+      !form.plateNumber || !form.ownerId || !form.imei ||
+      !form.plan || !form.trakzeeStatus || !form.installationDate || !form.expiryDate
     ) {
+      setSaveError("Please fill in all required fields.");
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await addVehicle({
+        plate_number: form.plateNumber,
+        imei: form.imei,
+        plan: form.plan,
+        expiry_date: form.expiryDate,
+        installation_date: form.installationDate,
+        trakzee_status: form.trakzeeStatus as "Active" | "Deactivated",
+        individual_customer_id: form.ownerType === "individual" ? form.ownerId : undefined,
+        company_id: form.ownerType === "company" ? form.ownerId : undefined,
+      });
+      setShowForm(false);
+      fetchVehicles();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save vehicle.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleTrakzee = async (v: Vehicle) => {
+    const next = v.trakzee_status === "Active" ? "Deactivated" : "Active";
+    try {
+      await updateTrakzee(v.id, next);
+      fetchVehicles();
+    } catch {
+      // silent — could add toast later
+    }
+  };
+
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+
+  const handleDelete = (id: string) => {
+    setConfirmRemoveId(id);
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!confirmRemoveId) return;
+    try {
+      await deleteVehicle(confirmRemoveId);
+      setVehicleList((prev) => prev.filter((v) => v.id !== confirmRemoveId));
+    } catch {
+      // silent
+    } finally {
+      setConfirmRemoveId(null);
+    }
+  };
+
+  const [paidIds, setPaidIds] = useState<Set<string>>(new Set());
+
+  // ── Payment dialog ────────────────────────────────────────────────────────
+  const [payTarget, setPayTarget] = useState<Vehicle | null>(null);
+  const [payForm, setPayForm] = useState({ year: new Date().getFullYear().toString(), months: "1", amount: "" });
+  const [payError, setPayError] = useState<string | null>(null);
+
+  const handleOpenPay = (v: Vehicle) => {
+    setPayTarget(v);
+    const base = v.monthly_amount ?? 0;
+    setPayForm({ year: new Date().getFullYear().toString(), months: "1", amount: String(base) });
+    setPayError(null);
+  };
+
+  const handleConfirmPay = async () => {
+    if (!payTarget) return;
+    const year = parseInt(payForm.year);
+    const months = parseInt(payForm.months);
+    const amount = parseFloat(payForm.amount);
+    if (!payForm.year || isNaN(year) || year < 2000 || year > 2100) {
+      setPayError("Enter a valid year (e.g. 2026).");
+      return;
+    }
+    if (isNaN(months) || months < 1 || months > 36) {
+      setPayError("Number of months must be between 1 and 24.");
+      return;
+    }
+    if (isNaN(amount) || amount <= 0) {
+      setPayError("Enter a valid amount greater than 0.");
       return;
     }
 
-    const newVehicle: Subscription = {
-      id: `SUB-${String(vehicleList.length + 1).padStart(3, "0")}`,
-      plateNumber: form.plateNumber,
-      customerName: form.customerName,
-      phone: form.phone,
-      imei: form.imei,
-      plan: form.plan,
-      trakzeeStatus: form.trakzeeStatus as "Active" | "Deactivated",
-      installationDate: form.installationDate,
-      expiryDate: form.expiryDate,
-      status: "Active",
-      monthlyAmount: PLAN_AMOUNTS[form.plan] ?? 99,
-    };
+    // Calculate new expiry date
+    const todayStr = todayISO();
+    const expiryStr = toDateStr(payTarget.expiry_date);
+    const startStr = expiryStr < todayStr ? todayStr : expiryStr;
+    const newExpiryISO = addMonths(startStr, months);
 
-    setVehicleList((prev) => [newVehicle, ...prev]);
-    setShowForm(false);
+    savePayment({
+      vehicleId: payTarget.id,
+      vehiclePlate: payTarget.plate_number,
+      ownerName: payTarget.customer_name,
+      ownerType: payTarget.company_id ? "company" : "individual",
+      year,
+      months,
+      amountGhs: amount,
+    });
+    setPaidIds((prev) => new Set([...prev, payTarget.id]));
+
+    // Patch backend + update local state immediately
+    try {
+      await updateVehicleExpiry(payTarget.id, newExpiryISO);
+    } catch {
+      // best-effort — local state still updates
+    }
+    setVehicleList((prev) =>
+      prev.map((v) =>
+        v.id === payTarget.id
+          ? { ...v, expiry_date: newExpiryISO, status: "Active" }
+          : v
+      )
+    );
+    setPayTarget(null);
   };
 
-  const selectCustomer = (name: string, phone: string) => {
-    setForm({ ...form, customerName: name, phone: phone });
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  const selectOwner = (owner: OwnerOption) => {
+    setForm({ ...form, ownerId: owner.id, ownerName: owner.name, ownerType: owner.type, phone: owner.phone });
     setCustomerDropdownOpen(false);
     setCustomerSearch("");
   };
 
+  const totalPages = Math.max(1, Math.ceil(vehicles.length / PAGE_SIZE));
+  const pageVehicles = vehicles.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // reset page on search change
+  useEffect(() => { setPage(1); }, [search]);
+
   return (
-    <div className="space-y-5 animate-fade-in-up" style={{ opacity: 0 }}>
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
-            Vehicle Registry
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {vehicleList.length} vehicles tracked with IMEI
-          </p>
-        </div>
-        <Button size="sm" className="gap-2" onClick={handleOpenForm}>
-          <Car size={15} /> Register Vehicle
-        </Button>
+    <div className="space-y-5">
+      {/* ── Page header ── */}
+      <div>
+        <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Vehicle Registry</h1>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {/* ── Search + Add ── */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="h-9" /> {/* spacer to match customer tab row height */}
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search"
+              className="pl-9 pr-4 h-9 text-sm rounded-lg border border-border bg-background w-48 focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+            />
+          </div>
+          <Button size="sm" className="gap-2 bg-odg-orange text-white hover:brightness-95 h-9" onClick={handleOpenForm}>
+            <Plus size={15} /> Register Vehicle
+          </Button>
+        </div>
+      </div>
+
+      {/* ── KPI cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          {
-            label: "Total Vehicles",
-            value: vehicleList.length,
-            color: "text-foreground",
-          },
-          {
-            label: "Trakzee Synced",
-            value: syncedCount,
-            color: "text-blue-600",
-          },
-          {
-            label: "Desynced / Off",
-            value: desyncedCount,
-            color: "text-red-500",
-          },
+          { label: "TOTAL VEHICLES",   value: vehicleList.length, color: "text-foreground",  trend: "+5%",  up: true  },
+          { label: "TRAKZEE ACTIVE",   value: syncedCount,        color: "text-foreground",  trend: "+2%",  up: true  },
+          { label: "DESYNCED / OFF",   value: desyncedCount,      color: "text-foreground",  trend: "-1%",  up: false },
+          { label: "EXPIRED",          value: expiredCount,       color: "text-red-500",     trend: null,   up: false },
         ].map((s) => (
-          <Card key={s.label} className="border border-border shadow-sm">
-            <CardContent className="py-4 px-4">
-              <p className="text-[0.65rem] uppercase tracking-widest text-muted-foreground font-semibold">
-                {s.label}
-              </p>
-              <p className={`text-2xl font-extrabold mt-1 ${s.color}`}>
-                {s.value}
-              </p>
-            </CardContent>
-          </Card>
+          <div key={s.label} className="bg-card border border-border rounded-xl px-5 py-4 shadow-sm">
+            <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-muted-foreground">{s.label}</p>
+            <div className="flex items-end gap-2 mt-1.5">
+              <span className={cn("text-3xl font-extrabold leading-none", s.color)}>{s.value.toLocaleString()}</span>
+              {s.trend && (
+                <span className={cn("flex items-center gap-0.5 text-xs font-semibold mb-0.5", s.up ? "text-emerald-600" : "text-orange-500")}>
+                  {s.up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                  {s.trend}
+                </span>
+              )}
+            </div>
+          </div>
         ))}
       </div>
 
-      <Card className="border border-border shadow-sm overflow-hidden">
-        <CardHeader className="border-b border-border py-4 px-5">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-base">All Vehicles</CardTitle>
-              <CardDescription className="text-xs mt-0.5">
-                {vehicles.length} shown
-              </CardDescription>
-            </div>
-            <div className="relative">
-              <Search
-                size={13}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Plate, IMEI or owner…"
-                className="pl-7 h-8 text-xs w-56 bg-muted/50 border-border focus-visible:ring-primary/30"
-              />
+      {/* ── Error ── */}
+      {error && (
+        <div className="flex items-center gap-2.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-4 py-3 text-sm">
+          <AlertCircle size={16} className="shrink-0" />
+          <span className="font-medium">{error}</span>
+        </div>
+      )}
+
+      {/* ── Full-width search bar ── */}
+      <div className="relative">
+        <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by plate, IMEI or owner..."
+          className="w-full pl-10 pr-4 h-11 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+        />
+      </div>
+
+      {/* ── Table ── */}
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+        {/* Column headers */}
+        <div className="grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_0.8fr_0.9fr_0.9fr_0.8fr_40px] gap-3 px-6 py-3 border-b border-border bg-muted/30">
+          {["PLATE", "OWNER", "IMEI", "PLAN", "TRAKZEE", "INSTALLED", "EXPIRY / STATUS", "SMS STATUS", ""].map((col) => (
+            <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm">
+            <Loader2 size={18} className="animate-spin" /> Loading vehicles…
+          </div>
+        ) : pageVehicles.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground py-12">No vehicles found.</p>
+        ) : (
+          <div className="divide-y divide-border">
+            {pageVehicles.map((v) => (
+              <div key={v.id} className="grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_0.8fr_0.9fr_0.9fr_0.8fr_40px] gap-3 items-center px-6 py-4 hover:bg-muted/30 transition-colors">
+                {/* Plate */}
+                <span className="font-bold text-sm text-foreground">{v.plate_number}</span>
+                {/* Owner */}
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-foreground truncate">{v.customer_name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{v.phone}</p>
+                </div>
+                {/* IMEI */}
+                <span className="font-mono text-xs text-muted-foreground truncate">{v.imei}</span>
+                {/* Plan */}
+                <div>
+                  <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-orange-50 text-odg-orange border-orange-200">
+                    {v.plan}
+                  </Badge>
+                </div>
+                {/* Trakzee */}
+                <div>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[0.7rem] font-semibold px-2.5 py-0.5 gap-1.5 flex items-center w-fit",
+                      v.trakzee_status === "Active"
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                        : "bg-red-50 text-red-600 border-red-200",
+                    )}
+                  >
+                    {v.trakzee_status === "Active" ? <Wifi size={10} /> : <WifiOff size={10} />}
+                    {v.trakzee_status}
+                  </Badge>
+                </div>
+                {/* Installation date */}
+                <span className="text-sm text-muted-foreground">
+                  {v.installation_date ? new Date(v.installation_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                </span>
+                {/* Expiry + Status badge */}
+                <div>
+                  <span className="text-sm text-muted-foreground block">
+                    {new Date(v.expiry_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                  </span>
+                  {(() => {
+                    const s = computeStatus(v.expiry_date, v.status);
+                    const cfg: Record<string, string> = {
+                      Active:    "bg-emerald-50 text-emerald-700 border-emerald-200",
+                      "Due Soon": "bg-amber-50 text-amber-700 border-amber-200",
+                      Expired:   "bg-red-50 text-red-700 border-red-200",
+                      Suspended: "bg-zinc-100 text-zinc-500 border-zinc-200",
+                    };
+                    return (
+                      <Badge variant="outline" className={cn("mt-1 text-[0.65rem] font-semibold px-2 py-0", cfg[s] ?? cfg.Active)}>
+                        {s}
+                      </Badge>
+                    );
+                  })()}
+                </div>
+                {/* SMS Status */}
+                <div>
+                  {computeStatus(v.expiry_date, v.status) === "Due Soon" ? (
+                    <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200">
+                      Sent
+                    </Badge>
+                  ) : (computeStatus(v.expiry_date, v.status) === "Expired" || computeStatus(v.expiry_date, v.status) === "Suspended") ? (
+                    <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-red-50 text-red-700 border-red-200">
+                      Failed
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+                {/* Actions */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground">
+                      <MoreHorizontal size={15} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    {v.status !== "Suspended" && (
+                      <DropdownMenuItem
+                        className="text-xs cursor-pointer text-emerald-600 focus:text-emerald-600"
+                        onClick={() => handleOpenPay(v)}
+                      >
+                        <CreditCard size={12} className="mr-1.5" />
+                        {paidIds.has(v.id) ? "Payment Recorded ✓" : "Record Payment"}
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => handleToggleTrakzee(v)}>
+                      {v.trakzee_status === "Active" ? "Deactivate Trakzee" : "Activate Trakzee"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => handleDelete(v.id)}>
+                      Remove Vehicle
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Pagination footer ── */}
+        {!loading && vehicles.length > 0 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-border">
+            <p className="text-xs text-muted-foreground">
+              Showing {Math.min((page - 1) * PAGE_SIZE + 1, vehicles.length)} to {Math.min(page * PAGE_SIZE, vehicles.length)} of {vehicles.length.toLocaleString()} vehicles
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              {Array.from({ length: Math.min(3, totalPages) }, (_, idx) => {
+                const p = idx + 1;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={cn(
+                      "w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors",
+                      page === p
+                        ? "bg-odg-orange text-white shadow-sm"
+                        : "border border-border text-muted-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+              {totalPages > 3 && <span className="text-xs text-muted-foreground px-1">…</span>}
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={14} />
+              </button>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  {[
-                    "Plate Number",
-                    "Owner",
-                    "IMEI",
-                    "Plan",
-                    "Trakzee",
-                    "Installation Date",
-                    "Expiry",
-                    "",
-                  ].map((h) => (
-                    <TableHead
-                      key={h}
-                      className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground"
-                    >
-                      {h}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {vehicles.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className="py-10 text-center text-muted-foreground text-sm"
-                    >
-                      No vehicles match your search.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {vehicles.map((v) => (
-                  <TableRow key={v.id} className="hover:bg-muted/30 group">
-                    <TableCell className="font-bold text-sm pl-5">
-                      {v.plateNumber}
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium text-sm">
-                        {v.customerName}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {v.phone}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {v.imei}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className="text-[0.65rem] font-semibold px-2 py-0.5 bg-odg-orange-bg text-odg-orange-dark border-orange-200"
-                      >
-                        {v.plan}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-[0.65rem] font-semibold px-2 py-0.5 gap-1.5",
-                          v.trakzeeStatus === "Active"
-                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                            : "bg-red-50 text-red-600 border-red-200",
-                        )}
-                      >
-                        {v.trakzeeStatus === "Active" ? (
-                          <Wifi size={10} />
-                        ) : (
-                          <WifiOff size={10} />
-                        )}
-                        {v.trakzeeStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {v.installationDate ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {v.expiryDate}
-                    </TableCell>
-                    <TableCell className="pr-5">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground"
-                          >
-                            <MoreHorizontal size={15} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem className="text-xs cursor-pointer">
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-xs cursor-pointer">
-                            Sync Trakzee
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive">
-                            Remove Vehicle
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* ── Register Vehicle Dialog ────────────────────────────────────── */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Register New Vehicle</DialogTitle>
-            <DialogDescription>
-              Fill in the vehicle and owner details below.
-            </DialogDescription>
+            <DialogDescription>Fill in the vehicle and owner details below.</DialogDescription>
           </DialogHeader>
+
+          {saveError && (
+            <p className="text-sm text-destructive font-medium -mt-1">{saveError}</p>
+          )}
 
           <div className="grid gap-4 py-2">
             {/* Row 1 — Plate & Owner */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5 flex flex-col justify-end">
-                <Label htmlFor="reg-plate" className="text-xs">
-                  Plate Number
-                </Label>
+                <Label htmlFor="reg-plate" className="text-xs">Plate Number</Label>
                 <Input
                   id="reg-plate"
                   placeholder="GP ABC 123"
                   value={form.plateNumber}
-                  onChange={(e) =>
-                    setForm({ ...form, plateNumber: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, plateNumber: e.target.value })}
                 />
               </div>
               <div className="space-y-1.5 flex flex-col justify-end">
-                <Label htmlFor="reg-owner" className="text-xs">
-                  Owner Name
-                </Label>
-                <Popover
-                  open={customerDropdownOpen}
-                  onOpenChange={setCustomerDropdownOpen}
-                >
+                <Label htmlFor="reg-owner" className="text-xs">Owner</Label>
+                <Popover open={customerDropdownOpen} onOpenChange={setCustomerDropdownOpen}>
                   <PopoverTrigger asChild>
-                    <Button
-                      id="reg-owner"
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={customerDropdownOpen}
-                      className="w-full justify-between font-normal"
-                    >
-                      {form.customerName
-                        ? form.customerName
-                        : "Select customer..."}
+                    <Button id="reg-owner" variant="outline" role="combobox" aria-expanded={customerDropdownOpen} className="w-full justify-between font-normal">
+                      {form.ownerName ? form.ownerName : "Select owner..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] max-h-[300px] overflow-hidden p-0"
-                    align="start"
-                  >
+                  <PopoverContent className="w-(--radix-popover-trigger-width) max-h-75 overflow-hidden p-0" align="start">
                     <div className="flex items-center border-b px-3">
                       <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                       <input
                         placeholder="Search customers..."
                         value={customerSearch}
                         onChange={(e) => setCustomerSearch(e.target.value)}
-                        className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                       />
                     </div>
-                    <div className="max-h-[200px] overflow-y-auto p-1">
-                      {filteredCustomers.length === 0 ? (
-                        <div className="py-6 text-center text-sm text-muted-foreground">
-                          No customers found.
-                        </div>
+                    <div className="max-h-50 overflow-y-auto p-1">
+                      {filteredOwners.length === 0 ? (
+                        <div className="py-6 text-center text-sm text-muted-foreground">No customers found.</div>
                       ) : (
-                        filteredCustomers.map((customer) => (
+                        filteredOwners.map((owner) => (
                           <div
-                            key={customer.name}
+                            key={owner.id}
                             className={cn(
                               "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                              form.customerName === customer.name
-                                ? "bg-accent/50"
-                                : "",
+                              form.ownerId === owner.id ? "bg-accent/50" : "",
                             )}
-                            onClick={() =>
-                              selectCustomer(customer.name, customer.phone)
-                            }
+                            onClick={() => selectOwner(owner)}
                           >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                form.customerName === customer.name
-                                  ? "opacity-100"
-                                  : "opacity-0",
-                              )}
-                            />
+                            <Check className={cn("mr-2 h-4 w-4", form.ownerId === owner.id ? "opacity-100" : "opacity-0")} />
                             <div className="flex flex-col">
-                              <span className="font-medium text-foreground">
-                                {customer.name}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {customer.phone}
-                              </span>
+                              <span className="font-medium text-foreground">{owner.name}</span>
+                              <span className="text-xs text-muted-foreground">{owner.type === "company" ? "Company" : owner.phone}</span>
                             </div>
                           </div>
                         ))
                       )}
                     </div>
-                    {/* Allow creating a new customer if search doesn't match exactly */}
-                    {customerSearch &&
-                      !uniqueCustomers.some(
-                        (c) =>
-                          c.name.toLowerCase() === customerSearch.toLowerCase(),
-                      ) && (
-                        <div className="border-t p-1">
-                          <div
-                            className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm text-primary font-medium hover:bg-accent hover:text-accent-foreground"
-                            onClick={() =>
-                              selectCustomer(customerSearch, form.phone)
-                            } // Keep phone if they already typed one, otherwise empty
-                          >
-                            Add "{customerSearch}" as new...
-                          </div>
-                        </div>
-                      )}
                   </PopoverContent>
                 </Popover>
               </div>
             </div>
 
-            {/* Row 2 — Phone & IMEI */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5 flex flex-col justify-end">
-                <Label htmlFor="reg-phone" className="text-xs">
-                  Phone
-                </Label>
-                <Input
-                  id="reg-phone"
-                  placeholder="+27 61 234 5678"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5 flex flex-col justify-end">
-                <Label htmlFor="reg-imei" className="text-xs">
-                  IMEI
-                </Label>
-                <Input
-                  id="reg-imei"
-                  placeholder="356938035643809"
-                  value={form.imei}
-                  onChange={(e) => setForm({ ...form, imei: e.target.value })}
-                />
-              </div>
+            {/* Row 2 — IMEI */}
+            <div className="space-y-1.5">
+              <Label htmlFor="reg-imei" className="text-xs">IMEI</Label>
+              <Input
+                id="reg-imei"
+                placeholder="356938035643809"
+                value={form.imei}
+                onChange={(e) => setForm({ ...form, imei: e.target.value })}
+              />
             </div>
 
-            {/* Row 3 — Plan & Trakzee Status */}
+            {/* Row 3 — Plan & Trakzee */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5 flex flex-col justify-end">
                 <Label className="text-xs">Plan</Label>
-                <Select
-                  value={form.plan}
-                  onValueChange={(val) => setForm({ ...form, plan: val })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select plan" />
-                  </SelectTrigger>
+                <Select value={form.plan} onValueChange={(val) => setForm({ ...form, plan: val })}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select plan" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Basic">Basic</SelectItem>
                     <SelectItem value="Standard">Standard</SelectItem>
@@ -526,18 +651,8 @@ export default function VehiclesView() {
               </div>
               <div className="space-y-1.5 flex flex-col justify-end">
                 <Label className="text-xs">Trakzee Status</Label>
-                <Select
-                  value={form.trakzeeStatus}
-                  onValueChange={(val) =>
-                    setForm({
-                      ...form,
-                      trakzeeStatus: val as "Active" | "Deactivated",
-                    })
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
+                <Select value={form.trakzeeStatus} onValueChange={(val) => setForm({ ...form, trakzeeStatus: val as "Active" | "Deactivated" })}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Active">Active</SelectItem>
                     <SelectItem value="Deactivated">Deactivated</SelectItem>
@@ -546,45 +661,179 @@ export default function VehiclesView() {
               </div>
             </div>
 
-            {/* Row 4 — Installation Date & Expiry Date */}
+            {/* Row 4 — Dates */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5 flex flex-col justify-end">
-                <Label htmlFor="reg-install-date" className="text-xs">
-                  Installation Date
-                </Label>
-                <Input
-                  id="reg-install-date"
-                  type="date"
-                  value={form.installationDate}
-                  onChange={(e) =>
-                    setForm({ ...form, installationDate: e.target.value })
-                  }
-                />
+                <Label htmlFor="reg-install-date" className="text-xs">Installation Date</Label>
+                <Input id="reg-install-date" type="date" value={form.installationDate} onChange={(e) => setForm({ ...form, installationDate: e.target.value })} />
               </div>
               <div className="space-y-1.5 flex flex-col justify-end">
-                <Label htmlFor="reg-expiry" className="text-xs">
-                  Expiry Date
-                </Label>
+                <Label htmlFor="reg-expiry" className="text-xs">Expiry Date</Label>
+                <Input id="reg-expiry" type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <><Loader2 size={14} className="animate-spin mr-2" />Saving…</> : "Save Vehicle"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Record Payment Dialog ─────────────────────────────────────── */}
+      <Dialog open={!!payTarget} onOpenChange={(open) => { if (!open) setPayTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              Enter payment details for{" "}
+              <span className="font-semibold text-foreground">{payTarget?.plate_number}</span>
+              {payTarget && (
+                <span className="text-muted-foreground"> — {payTarget.customer_name}</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {payError && (
+            <p className="text-sm text-destructive font-medium -mt-1">{payError}</p>
+          )}
+
+          <div className="grid gap-4 py-1">
+            {/* Vehicle Number (read-only) */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Vehicle Number</Label>
+              <Input value={payTarget?.plate_number ?? ""} readOnly className="bg-muted/50 cursor-default" />
+            </div>
+
+            {/* Year */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pay-year" className="text-xs">Year</Label>
+              <Input
+                id="pay-year"
+                type="number"
+                min={2000}
+                max={2100}
+                placeholder="2026"
+                value={payForm.year}
+                onChange={(e) => setPayForm({ ...payForm, year: e.target.value })}
+              />
+            </div>
+
+            {/* Number of months */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pay-months" className="text-xs">Number of Months</Label>
+              <Select
+                value={payForm.months}
+                onValueChange={(val) => {
+                  const base = payTarget?.monthly_amount ?? 0;
+                  setPayForm({ ...payForm, months: val, amount: String(base * parseInt(val)) });
+                }}
+              >
+                <SelectTrigger id="pay-months" className="w-full">
+                  <SelectValue placeholder="Select months" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 36 }, (_, i) => i + 1).map((m) => (
+                    <SelectItem key={m} value={String(m)}>{m} month{m > 1 ? "s" : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* New Due Date (computed) */}
+            {payTarget && (() => {
+              const todayStr = todayISO();
+              const expiryStr = toDateStr(payTarget.expiry_date);
+              const isExpired = expiryStr < todayStr;
+              const startStr = isExpired ? todayStr : expiryStr;
+              const newExpiryStr = addMonths(startStr, parseInt(payForm.months));
+              const [ny, nm, nd] = newExpiryStr.split("-").map(Number);
+              const newDue = new Date(ny, nm - 1, nd).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+              return (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">New Expiry Date</Label>
+                  <div className={`flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-semibold ${isExpired ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}>
+                    <span>{newDue}</span>
+                    <span className="text-[0.65rem] font-normal text-muted-foreground ml-auto">
+                      {isExpired ? `starting from today + ${payForm.months} mo` : `from expiry + ${payForm.months} mo`}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Amount Due */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pay-amount" className="text-xs">
+                Amount Due (GH₵)
+                <span className="ml-1.5 text-muted-foreground font-normal">
+                  = GH₵{payTarget?.monthly_amount ?? 0} × {payForm.months} month{parseInt(payForm.months) > 1 ? "s" : ""}
+                </span>
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">GH₵</span>
                 <Input
-                  id="reg-expiry"
-                  type="date"
-                  value={form.expiryDate}
-                  onChange={(e) =>
-                    setForm({ ...form, expiryDate: e.target.value })
-                  }
+                  id="pay-amount"
+                  type="number"
+                  readOnly
+                  value={payForm.amount}
+                  className="pl-10 bg-muted/50 cursor-default font-semibold text-emerald-700"
                 />
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>
-              Cancel
+            <Button variant="outline" onClick={() => setPayTarget(null)}>Cancel</Button>
+            <Button onClick={handleConfirmPay} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <CreditCard size={14} className="mr-1.5" /> Confirm Payment
             </Button>
-            <Button onClick={handleSave}>Save Vehicle</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Confirm Remove Dialog ── */}
+      {(() => {
+        const target = confirmRemoveId ? vehicleList.find((v) => v.id === confirmRemoveId) : null;
+        return (
+          <Dialog open={!!confirmRemoveId} onOpenChange={(open) => { if (!open) setConfirmRemoveId(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Remove Vehicle</DialogTitle>
+                <DialogDescription>
+                  This vehicle will be moved to the Removed list. You can restore it later.
+                </DialogDescription>
+              </DialogHeader>
+              {target && (
+                <div className="rounded-xl border border-border bg-muted/30 px-5 py-4 space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Plate</span>
+                    <span className="font-semibold">{target.plate_number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Owner</span>
+                    <span className="font-semibold">{target.customer_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Plan</span>
+                    <span className="font-semibold">{target.plan}</span>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmRemoveId(null)}>Cancel</Button>
+                <Button onClick={handleConfirmRemove} className="bg-destructive hover:bg-destructive/90 text-white">
+                  Remove Vehicle
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </div>
   );
 }
+

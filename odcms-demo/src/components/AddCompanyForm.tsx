@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef } from "react"
+import React, { useState } from "react"
 import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form"
+import { createCompany } from "@/lib/customers-api"
 
 type CompanyPayload = {
   companyName: string
@@ -24,12 +25,7 @@ type CompanyPayload = {
   taxId: string
 }
 
-type CompanyRecord = CompanyPayload & {
-  id: string
-  createdAt: string
-}
-
-export default function AddCompanyForm({ onCreated }: { onCreated?: (d: CompanyRecord) => void }) {
+export default function AddCompanyForm({ onCreated }: { onCreated?: () => void }) {
   const form = useForm<CompanyPayload>({
     defaultValues: {
       companyName: "",
@@ -44,26 +40,35 @@ export default function AddCompanyForm({ onCreated }: { onCreated?: (d: CompanyR
   })
 
   const [submitting, setSubmitting] = useState(false)
-  const idCounter = useRef(1)
+  const [apiError, setApiError] = useState<string | null>(null)
 
-  const onSubmit = (values: CompanyPayload) => {
+  const onSubmit = async (values: CompanyPayload) => {
     setSubmitting(true)
-    const record: CompanyRecord = {
-      id: `CO-${idCounter.current++}`,
-      createdAt: new Date().toISOString(),
-      ...values,
-    }
-    console.log("AddCompanyForm submit:", record)
-    onCreated?.(record)
-    setTimeout(() => {
-      setSubmitting(false)
+    setApiError(null)
+    try {
+      await createCompany({
+        company_name: values.companyName,
+        billing_contact_name: values.contactPerson || undefined,
+        contact_phone: values.telephone || undefined,
+        email: values.email || undefined,
+        address: values.address ? `${values.address}, ${values.city} ${values.postalCode}`.trim() : undefined,
+        tax_id: values.taxId || undefined,
+      })
       form.reset()
-    }, 350)
+      onCreated?.()
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Failed to create company.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
     <Form {...form}>
       <form onSubmit={(e) => form.handleSubmit(onSubmit)(e)} className="space-y-4">
+        {apiError && (
+          <p className="text-sm text-destructive font-medium">{apiError}</p>
+        )}
         <FormField
           control={form.control}
           name="companyName"

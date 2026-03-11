@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import {
     LayoutDashboard,
     Users,
@@ -10,7 +11,7 @@ import {
     Upload,
     ChevronLeft,
     ChevronRight,
-    Activity,
+    History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -25,12 +26,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-    { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} />, section: "main" },
-    { id: "customers", label: "Customers", icon: <Users size={18} />, section: "main" },
-    { id: "vehicles", label: "Vehicles", icon: <Car size={18} />, section: "main" },
-    { id: "subscriptions", label: "Subscriptions", icon: <CreditCard size={18} />, section: "main", badge: 3 },
-    { id: "removed", label: "Removed List", icon: <ShieldOff size={18} />, section: "main" },
-    { id: "bulk-import", label: "Bulk Import", icon: <Upload size={18} />, section: "tools" },
+    { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} />, section: "main" },
+    { id: "customers", label: "Customers", icon: <Users size={20} />, section: "main" },
+    { id: "vehicles", label: "Vehicles", icon: <Car size={20} />, section: "main" },
+    { id: "subscriptions", label: "Subscriptions", icon: <CreditCard size={20} />, section: "main", badge: 3 },
+    { id: "removed", label: "Removed List", icon: <ShieldOff size={20} />, section: "main" },
+    { id: "payment-history", label: "Payment History", icon: <History size={20} />, section: "main" },
+    { id: "bulk-import", label: "Bulk Import", icon: <Upload size={20} />, section: "tools" },
 ];
 
 interface SidebarProps {
@@ -50,17 +52,16 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
             <button
                 onClick={() => onNavigate(item.id)}
                 className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 relative group",
+                    "w-full flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 relative group",
+                    collapsed ? "justify-center px-0" : "px-3",
                     isActive
-                        ? "bg-odg-orange text-white shadow-md shadow-orange-900/30"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                        ? "bg-white text-odg-orange shadow-md shadow-black/20"
+                        : "text-white/80 hover:bg-white/15 hover:text-white"
                 )}
-                style={{ justifyContent: collapsed ? "center" : "flex-start" }}
-                title={collapsed ? item.label : ""}
             >
                 {/* Active indicator stripe */}
                 {isActive && !collapsed && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-white/50 rounded-r-full" />
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-odg-orange rounded-r-full" />
                 )}
 
                 <span className="shrink-0">{item.icon}</span>
@@ -69,7 +70,7 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
                     <>
                         <span className="flex-1 text-left leading-none">{item.label}</span>
                         {item.badge && (
-                            <span className="ml-auto text-[0.65rem] font-bold bg-white/20 text-white px-1.5 py-0.5 rounded-full leading-none">
+                            <span className="ml-auto text-[0.65rem] font-bold bg-odg-orange text-white px-1.5 py-0.5 rounded-full leading-none">
                                 {item.badge}
                             </span>
                         )}
@@ -77,7 +78,7 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
                 )}
 
                 {collapsed && item.badge && (
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-odg-orange border border-sidebar" />
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white border border-sidebar" />
                 )}
             </button>
         );
@@ -113,15 +114,15 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
                     collapsed ? "px-3 py-4 justify-center" : "px-4 py-4"
                 )}
             >
-                <div className="shrink-0 w-9 h-9 rounded-lg bg-linear-to-br from-odg-orange to-odg-orange-dark flex items-center justify-center shadow-lg shadow-orange-900/40">
-                    <Activity size={18} className="text-white" />
+                <div className="shrink-0 w-9 h-9 rounded-lg overflow-hidden">
+                    <Image src="/favicon.png" alt="ODG Logo" width={36} height={36} className="w-full h-full object-contain" />
                 </div>
                 {!collapsed && (
                     <div className="overflow-hidden">
-                        <div className="font-extrabold text-[0.95rem] text-sidebar-foreground leading-tight tracking-tight">
+                        <div className="font-extrabold text-[0.95rem] text-white leading-tight tracking-tight">
                             ODCMS
                         </div>
-                        <div className="text-[0.6rem] text-sidebar-foreground/50 font-medium tracking-widest uppercase">
+                        <div className="text-[0.6rem] text-white/60 font-medium tracking-widest uppercase">
                             ODG Master Authority
                         </div>
                     </div>
@@ -131,7 +132,7 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
             {/* ── Navigation ── */}
             <nav className="flex-1 overflow-y-auto py-4 px-2 flex flex-col gap-0.5">
                 {!collapsed && (
-                    <p className="px-2 mb-2 text-[0.6rem] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+                    <p className="px-2 mb-2 text-[0.6rem] font-semibold uppercase tracking-widest text-white/50">
                         Main
                     </p>
                 )}
@@ -142,7 +143,7 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
                 <Separator className="my-3 bg-sidebar-border" />
 
                 {!collapsed && (
-                    <p className="px-2 mb-2 text-[0.6rem] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+                    <p className="px-2 mb-2 text-[0.6rem] font-semibold uppercase tracking-widest text-white/50">
                         Tools
                     </p>
                 )}
@@ -153,19 +154,27 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
 
             {/* ── Collapse Toggle ── */}
             <div className="border-t border-sidebar-border p-2">
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            onClick={() => setCollapsed(!collapsed)}
-                            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground text-xs font-medium transition-all duration-200"
-                        >
-                            {collapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /><span>Collapse</span></>}
-                        </button>
-                    </TooltipTrigger>
-                    {collapsed && (
-                        <TooltipContent side="right">Expand sidebar</TooltipContent>
-                    )}
-                </Tooltip>
+                {collapsed ? (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                onClick={() => setCollapsed(false)}
+                                className="w-full flex items-center justify-center py-2.5 rounded-lg bg-white/20 hover:bg-white/35 text-white transition-all duration-200 shadow-sm"
+                            >
+                                <ChevronRight size={18} strokeWidth={2.5} />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="font-medium">Expand sidebar</TooltipContent>
+                    </Tooltip>
+                ) : (
+                    <button
+                        onClick={() => setCollapsed(true)}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-white/70 hover:bg-white/15 hover:text-white text-xs font-medium transition-all duration-200"
+                    >
+                        <ChevronLeft size={16} />
+                        <span>Collapse</span>
+                    </button>
+                )}
             </div>
         </aside>
     );

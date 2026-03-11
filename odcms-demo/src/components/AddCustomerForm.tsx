@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef } from "react"
+import React, { useState } from "react"
 import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form"
+import { createIndividual } from "@/lib/customers-api"
 
 type CustomerPayload = {
   clientName: string
@@ -23,12 +24,7 @@ type CustomerPayload = {
   postalCode: string
 }
 
-type CustomerRecord = CustomerPayload & {
-  id: string
-  createdAt: string
-}
-
-export default function AddCustomerForm({ onCreated }: { onCreated?: (d: CustomerRecord) => void }) {
+export default function AddCustomerForm({ onCreated }: { onCreated?: () => void }) {
   const form = useForm<CustomerPayload>({
     defaultValues: {
       clientName: "",
@@ -42,26 +38,28 @@ export default function AddCustomerForm({ onCreated }: { onCreated?: (d: Custome
   })
 
   const [submitting, setSubmitting] = useState(false)
-  const idCounter = useRef(1)
+  const [apiError, setApiError] = useState<string | null>(null)
 
-  const onSubmit = (values: CustomerPayload) => {
+  const onSubmit = async (values: CustomerPayload) => {
     setSubmitting(true)
-    const record: CustomerRecord = {
-      id: `CUST-${idCounter.current++}`,
-      createdAt: new Date().toISOString(),
-      ...values,
-    }
-    console.log("AddCustomerForm submit:", record)
-    onCreated?.(record)
-    setTimeout(() => {
-      setSubmitting(false)
+    setApiError(null)
+    try {
+      await createIndividual({ name: values.clientName, phone: values.telephone })
       form.reset()
-    }, 350)
+      onCreated?.()
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Failed to create customer.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
     <Form {...form}>
       <form onSubmit={(e) => form.handleSubmit(onSubmit)(e)} className="space-y-4">
+        {apiError && (
+          <p className="text-sm text-destructive font-medium">{apiError}</p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField
             control={form.control}

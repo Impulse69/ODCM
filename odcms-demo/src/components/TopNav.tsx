@@ -111,7 +111,7 @@ export default function TopNav({
           </PopoverTrigger>
           <PopoverContent
             align="end"
-            className="w-[380px] p-0 shadow-xl"
+            className="w-95 p-0 shadow-xl"
             sideOffset={8}
           >
             {/* Header */}
@@ -154,7 +154,7 @@ export default function TopNav({
                 >
                   <span
                     className={cn(
-                      "mt-1.5 flex-shrink-0 w-2 h-2 rounded-full",
+                      "mt-1.5 shrink-0 w-2 h-2 rounded-full",
                       typeColors[n.type],
                     )}
                   />
@@ -164,7 +164,7 @@ export default function TopNav({
                         {n.title}
                       </p>
                       {n.unread && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
@@ -176,7 +176,7 @@ export default function TopNav({
                   </div>
                   <button
                     onClick={() => dismissNotification(n.id)}
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all flex-shrink-0"
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all shrink-0"
                   >
                     <X size={12} />
                   </button>
@@ -199,7 +199,7 @@ export default function TopNav({
               className="flex items-center gap-2 pl-2 pr-3 h-9 border-border hover:border-primary/50 hover:bg-primary/5 transition-all"
             >
               <Avatar className="w-6 h-6">
-                <AvatarFallback className="bg-gradient-to-br from-[#ED7D31] to-[#C9651B] text-white text-[0.6rem] font-bold">
+                <AvatarFallback className="bg-linear-to-br from-odg-orange to-odg-orange-dark text-white text-[0.6rem] font-bold">
                   {user?.initials || "AD"}
                 </AvatarFallback>
               </Avatar>

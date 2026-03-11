@@ -1,13 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
-    CreditCard,
-    Power,
     ChevronUp,
     ChevronDown,
     Download,
-    CheckCircle,
     Search,
     RefreshCw,
 } from "lucide-react";
@@ -30,16 +27,25 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { subscriptions, Subscription, SubscriptionStatus } from "@/data/dummy";
+import { getVehicles, type Vehicle } from "@/lib/vehicles-api";
+
+// ── Compute display status from expiry date ──────────────────────────────────
+function computeStatus(expiryDate: string, backendStatus: string): string {
+    if (backendStatus === "Suspended") return "Suspended";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDate);
+    if (expiry < today) return "Expired";
+    const twoWeeks = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+    if (expiry <= twoWeeks) return "Due Soon";
+    return "Active";
+}
 
 // ── Status badge config ──────────────────────────────────────────────────────
-const statusConfig: Record<
-    SubscriptionStatus,
-    { label: string; className: string; dot: string }
-> = {
+const statusConfig: Record<string, { label: string; className: string; dot: string }> = {
     Active: { label: "Active", className: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
     "Due Soon": { label: "Due Soon", className: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
-    Overdue: { label: "Overdue", className: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500" },
+    Expired: { label: "Expired", className: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500" },
     Suspended: { label: "Suspended", className: "bg-zinc-100 text-zinc-500 border-zinc-200", dot: "bg-zinc-400" },
 };
 
@@ -54,78 +60,124 @@ const planColors: Record<string, string> = {
     Premium: "bg-violet-50 text-violet-700 border-violet-200",
 };
 
-type SortField = "customerName" | "expiryDate" | "status" | "plan";
+type SortField = "customer_name" | "expiry_date" | "status" | "plan";
 type SortDir = "asc" | "desc";
-type FilterTab = SubscriptionStatus | "All";
+type FilterTab = "All" | "Active" | "Due Soon" | "Expired" | "Suspended";
 
-const FILTER_TABS: FilterTab[] = ["All", "Active", "Due Soon", "Overdue", "Suspended"];
+const FILTER_TABS: FilterTab[] = ["All", "Active", "Due Soon", "Expired", "Suspended"];
 
-// ── Row action feedback ──────────────────────────────────────────────────────
-type ActionFeedback = "paid" | "deactivated" | null;
+// ── ThCell — declared outside component to avoid re-creation on render ───────
+function ThCell({
+    field,
+    children,
+    align = "left",
+    sortable = false,
+    sortField,
+    sortDir,
+    onSort,
+}: {
+    field?: SortField;
+    children: React.ReactNode;
+    align?: "left" | "right";
+    sortable?: boolean;
+    sortField?: SortField;
+    sortDir?: SortDir;
+    onSort?: (f: SortField) => void;
+}) {
+    const active = field && sortField === field;
+    return (
+        <TableHead
+            className={cn(
+                "text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground select-none",
+                align === "right" && "text-right",
+                sortable && "cursor-pointer hover:text-foreground transition-colors"
+            )}
+            onClick={sortable && field && onSort ? () => onSort(field) : undefined}
+        >
+            <span className="inline-flex items-center gap-1">
+                {children}
+                {sortable && field && (
+                    active && sortDir === "asc"
+                        ? <ChevronUp size={12} className="text-primary" />
+                        : active && sortDir === "desc"
+                            ? <ChevronDown size={12} className="text-primary" />
+                            : <ChevronDown size={12} className="opacity-25" />
+                )}
+            </span>
+        </TableHead>
+    );
+}
 
 export default function SubscriptionTable() {
+    const [data, setData] = useState<Vehicle[]>([]);
+    const [loading, setLoading] = useState(true);
     const [filterTab, setFilterTab] = useState<FilterTab>("All");
     const [search, setSearch] = useState("");
-    const [sortField, setSortField] = useState<SortField>("expiryDate");
+    const [sortField, setSortField] = useState<SortField>("expiry_date");
     const [sortDir, setSortDir] = useState<SortDir>("asc");
-    const [actionMap, setActionMap] = useState<Record<string, ActionFeedback>>({});
+
+    const fetchData = useCallback(() => {
+        getVehicles().then(setData).finally(() => setLoading(false));
+    }, []);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    // Re-fetch when a payment is recorded from VehiclesView
+    useEffect(() => {
+        const handler = () => { setLoading(true); fetchData(); };
+        window.addEventListener("payment-recorded", handler);
+        return () => window.removeEventListener("payment-recorded", handler);
+    }, [fetchData]);
+
+    const handleRefresh = () => {
+        setSearch("");
+        setFilterTab("All");
+        setLoading(true);
+        fetchData();
+    };
 
     const handleSort = (field: SortField) => {
         if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
         else { setSortField(field); setSortDir("asc"); }
     };
 
-    const SortChevron = ({ field }: { field: SortField }) => {
-        if (sortField !== field) return <ChevronDown size={12} className="opacity-25" />;
-        return sortDir === "asc"
-            ? <ChevronUp size={12} className="text-primary" />
-            : <ChevronDown size={12} className="text-primary" />;
-    };
-
     const counts = useMemo(
         () => ({
-            All: subscriptions.length,
-            Active: subscriptions.filter((s) => s.status === "Active").length,
-            "Due Soon": subscriptions.filter((s) => s.status === "Due Soon").length,
-            Overdue: subscriptions.filter((s) => s.status === "Overdue").length,
-            Suspended: subscriptions.filter((s) => s.status === "Suspended").length,
+            All: data.length,
+            Active: data.filter((s) => computeStatus(s.expiry_date, s.status) === "Active").length,
+            "Due Soon": data.filter((s) => computeStatus(s.expiry_date, s.status) === "Due Soon").length,
+            Expired: data.filter((s) => computeStatus(s.expiry_date, s.status) === "Expired").length,
+            Suspended: data.filter((s) => s.status === "Suspended").length,
         }),
-        []
+        [data]
     );
 
     const filtered = useMemo(() => {
-        return subscriptions
-            .filter((s) => filterTab === "All" || s.status === filterTab)
+        return data
+            .filter((s) => filterTab === "All" || computeStatus(s.expiry_date, s.status) === filterTab)
             .filter(
                 (s) =>
                     !search ||
-                    s.customerName.toLowerCase().includes(search.toLowerCase()) ||
-                    s.plateNumber.toLowerCase().includes(search.toLowerCase()) ||
+                    s.customer_name.toLowerCase().includes(search.toLowerCase()) ||
+                    s.plate_number.toLowerCase().includes(search.toLowerCase()) ||
                     s.imei.includes(search) ||
                     s.phone.includes(search)
             )
             .sort((a, b) => {
                 let cmp = 0;
-                if (sortField === "customerName") cmp = a.customerName.localeCompare(b.customerName);
-                if (sortField === "expiryDate") cmp = a.expiryDate.localeCompare(b.expiryDate);
-                if (sortField === "status") cmp = a.status.localeCompare(b.status);
+                if (sortField === "customer_name") cmp = a.customer_name.localeCompare(b.customer_name);
+                if (sortField === "expiry_date") cmp = a.expiry_date.localeCompare(b.expiry_date);
+                if (sortField === "status") cmp = computeStatus(a.expiry_date, a.status).localeCompare(computeStatus(b.expiry_date, b.status));
                 if (sortField === "plan") cmp = a.plan.localeCompare(b.plan);
                 return sortDir === "asc" ? cmp : -cmp;
             });
-    }, [filterTab, search, sortField, sortDir]);
-
-    const triggerAction = (id: string, action: "paid" | "deactivated") => {
-        setActionMap((prev) => ({ ...prev, [id]: action }));
-        setTimeout(() => {
-            setActionMap((prev) => { const n = { ...prev }; delete n[id]; return n; });
-        }, 2500);
-    };
+    }, [data, filterTab, search, sortField, sortDir]);
 
     const handleExport = () => {
         const headers = ["ID", "Customer", "Phone", "Plate", "IMEI", "Plan", "Amount", "Expiry", "Status", "Trakzee"];
         const rows = filtered.map((s) => [
-            s.id, s.customerName, s.phone, s.plateNumber, s.imei,
-            s.plan, `GH₵${s.monthlyAmount}`, s.expiryDate, s.status, s.trakzeeStatus,
+            s.id, s.customer_name, s.phone, s.plate_number, s.imei,
+            s.plan, `GH₵${s.monthly_amount}`, s.expiry_date, s.status, s.trakzee_status,
         ]);
         const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
         const blob = new Blob([csv], { type: "text/csv" });
@@ -134,31 +186,7 @@ export default function SubscriptionTable() {
         a.click(); URL.revokeObjectURL(url);
     };
 
-    const ThCell = ({
-        field,
-        children,
-        align = "left",
-        sortable = false,
-    }: {
-        field?: SortField;
-        children: React.ReactNode;
-        align?: "left" | "right";
-        sortable?: boolean;
-    }) => (
-        <TableHead
-            className={cn(
-                "text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground select-none",
-                align === "right" && "text-right",
-                sortable && "cursor-pointer hover:text-foreground transition-colors"
-            )}
-            onClick={sortable && field ? () => handleSort(field) : undefined}
-        >
-            <span className="inline-flex items-center gap-1">
-                {children}
-                {sortable && field && <SortChevron field={field} />}
-            </span>
-        </TableHead>
-    );
+    const thProps = { sortField, sortDir, onSort: handleSort };
 
     return (
         <Card className="border border-border shadow-sm overflow-hidden">
@@ -168,7 +196,7 @@ export default function SubscriptionTable() {
                     <div>
                         <CardTitle className="text-base font-bold">Due Subscriptions</CardTitle>
                         <CardDescription className="text-xs mt-0.5">
-                            {filtered.length} subscription{filtered.length !== 1 ? "s" : ""} found
+                            {loading ? "Loading…" : `${filtered.length} subscription${filtered.length !== 1 ? "s" : ""} found`}
                         </CardDescription>
                     </div>
                     <div className="flex gap-2">
@@ -177,14 +205,14 @@ export default function SubscriptionTable() {
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setSearch("")}
+                                    onClick={handleRefresh}
                                     className="h-8 gap-1.5 text-xs border-border hover:border-primary/50"
                                 >
                                     <RefreshCw size={13} />
-                                    Reset
+                                    Refresh
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Clear filters</TooltipContent>
+                            <TooltipContent>Refresh data &amp; clear filters</TooltipContent>
                         </Tooltip>
                         <Button
                             variant="outline"
@@ -200,10 +228,7 @@ export default function SubscriptionTable() {
 
                 {/* Tabs + search row */}
                 <div className="flex items-center justify-between gap-3 flex-wrap pb-1">
-                    <Tabs
-                        value={filterTab}
-                        onValueChange={(v) => setFilterTab(v as FilterTab)}
-                    >
+                    <Tabs value={filterTab} onValueChange={(v) => setFilterTab(v as FilterTab)}>
                         <TabsList className="h-8 bg-muted/60 p-0.5 gap-0.5">
                             {FILTER_TABS.map((tab) => (
                                 <TabsTrigger
@@ -238,55 +263,64 @@ export default function SubscriptionTable() {
                     <Table>
                         <TableHeader>
                             <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                <ThCell field="customerName" sortable>Customer Info</ThCell>
-                                <ThCell>Vehicle</ThCell>
-                                <ThCell field="expiryDate" sortable>Expiry & Status</ThCell>
-                                <ThCell>Trakzee Sync</ThCell>
-                                <ThCell field="plan" sortable>Plan</ThCell>
-                                <ThCell align="right">Actions</ThCell>
+                                <ThCell field="customer_name" sortable {...thProps}>Customer Info</ThCell>
+                                <ThCell {...thProps}>Vehicle</ThCell>
+                                <ThCell {...thProps}>Installed</ThCell>
+                                <ThCell field="expiry_date" sortable {...thProps}>Expiry & Status</ThCell>
+                                <ThCell {...thProps}>Trakzee Sync</ThCell>
+                                <ThCell field="plan" sortable {...thProps}>Plan</ThCell>
+                                <ThCell {...thProps}>SMS Status</ThCell>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filtered.length === 0 && (
+                            {loading && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="py-12 text-center text-muted-foreground text-sm">
+                                    <TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
+                                        Loading subscriptions…
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                            {!loading && filtered.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
                                         No subscriptions match your current filters.
                                     </TableCell>
                                 </TableRow>
                             )}
-                            {filtered.map((sub) => {
-                                const feedback = actionMap[sub.id];
-                                const statusCfg = statusConfig[sub.status];
-                                const trakzeeCfg = trakzeeConfig[sub.trakzeeStatus];
+                            {!loading && filtered.map((sub) => {
+                                const computedStatus = computeStatus(sub.expiry_date, sub.status);
+                                const statusCfg = statusConfig[computedStatus] ?? statusConfig.Active;
+                                const trakzeeCfg = trakzeeConfig[sub.trakzee_status] ?? trakzeeConfig.Deactivated;
                                 const planColor = planColors[sub.plan] ?? planColors.Standard;
+                                const formattedExpiry = new Date(sub.expiry_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+                                const formattedInstall = sub.installation_date
+                                    ? new Date(sub.installation_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+                                    : "—";
 
                                 return (
-                                    <TableRow
-                                        key={sub.id}
-                                        className="group hover:bg-muted/30 transition-colors"
-                                    >
+                                    <TableRow key={sub.id} className="group hover:bg-muted/30 transition-colors">
                                         {/* Customer */}
                                         <TableCell className="py-3.5 pl-5">
-                                            <div className="font-semibold text-sm text-foreground">{sub.customerName}</div>
+                                            <div className="font-semibold text-sm text-foreground">{sub.customer_name}</div>
                                             <div className="text-xs text-muted-foreground mt-0.5">{sub.phone}</div>
                                             <div className="text-[0.65rem] text-muted-foreground/60 font-mono mt-0.5">{sub.id}</div>
                                         </TableCell>
 
                                         {/* Vehicle */}
                                         <TableCell className="py-3.5">
-                                            <div className="font-semibold text-sm">{sub.plateNumber}</div>
-                                            <div className="text-[0.7rem] font-mono text-muted-foreground mt-0.5">
-                                                {sub.imei}
-                                            </div>
+                                            <div className="font-semibold text-sm">{sub.plate_number}</div>
+                                            <div className="text-[0.7rem] font-mono text-muted-foreground mt-0.5">{sub.imei}</div>
+                                        </TableCell>
+
+                                        {/* Installed */}
+                                        <TableCell className="py-3.5">
+                                            <span className="text-sm text-foreground">{formattedInstall}</span>
                                         </TableCell>
 
                                         {/* Expiry & Status */}
                                         <TableCell className="py-3.5">
-                                            <div className="text-sm text-foreground mb-1.5">{sub.expiryDate}</div>
-                                            <Badge
-                                                variant="outline"
-                                                className={cn("text-[0.65rem] font-semibold px-2 py-0.5 gap-1.5", statusCfg.className)}
-                                            >
+                                            <div className="text-sm text-foreground mb-1.5">{formattedExpiry}</div>
+                                            <Badge variant="outline" className={cn("text-[0.65rem] font-semibold px-2 py-0.5 gap-1.5", statusCfg.className)}>
                                                 <span className={cn("w-1.5 h-1.5 rounded-full", statusCfg.dot)} />
                                                 {statusCfg.label}
                                             </Badge>
@@ -294,67 +328,31 @@ export default function SubscriptionTable() {
 
                                         {/* Trakzee */}
                                         <TableCell className="py-3.5">
-                                            <Badge
-                                                variant="outline"
-                                                className={cn("text-[0.65rem] font-semibold px-2 py-0.5", trakzeeCfg.className)}
-                                            >
-                                                {sub.trakzeeStatus}
+                                            <Badge variant="outline" className={cn("text-[0.65rem] font-semibold px-2 py-0.5", trakzeeCfg.className)}>
+                                                {sub.trakzee_status}
                                             </Badge>
                                         </TableCell>
 
                                         {/* Plan */}
                                         <TableCell className="py-3.5">
-                                            <Badge
-                                                variant="outline"
-                                                className={cn("text-[0.65rem] font-semibold px-2 py-0.5 mb-1", planColor)}
-                                            >
+                                            <Badge variant="outline" className={cn("text-[0.65rem] font-semibold px-2 py-0.5 mb-1", planColor)}>
                                                 {sub.plan}
                                             </Badge>
-                                            <div className="text-[0.7rem] text-muted-foreground">GH₵{sub.monthlyAmount}/mo</div>
+                                            <div className="text-[0.7rem] text-muted-foreground">GH₵{sub.monthly_amount}/mo</div>
                                         </TableCell>
 
-                                        {/* Actions */}
-                                        <TableCell className="py-3.5 pr-5 text-right">
-                                            {feedback === "paid" ? (
-                                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                                                    <CheckCircle size={13} /> Payment Recorded
-                                                </span>
-                                            ) : feedback === "deactivated" ? (
-                                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-500">
-                                                    <Power size={13} /> Deactivated
-                                                </span>
+                                        {/* SMS Status */}
+                                        <TableCell className="py-3.5">
+                                            {computedStatus === "Due Soon" ? (
+                                                <Badge variant="outline" className="text-[0.65rem] font-semibold px-2 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200">
+                                                    Sent
+                                                </Badge>
+                                            ) : (computedStatus === "Expired" || computedStatus === "Suspended") ? (
+                                                <Badge variant="outline" className="text-[0.65rem] font-semibold px-2 py-0.5 bg-red-50 text-red-700 border-red-200">
+                                                    Failed
+                                                </Badge>
                                             ) : (
-                                                <div className="flex gap-1.5 justify-end">
-                                                    {sub.status !== "Suspended" && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button
-                                                                    size="xs"
-                                                                    onClick={() => triggerAction(sub.id, "paid")}
-                                                                    className="h-7 px-2.5 text-xs gap-1 bg-primary hover:bg-primary/90"
-                                                                >
-                                                                    <CreditCard size={12} /> Pay
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>Record payment for {sub.customerName}</TooltipContent>
-                                                        </Tooltip>
-                                                    )}
-                                                    {(sub.status === "Overdue" || sub.status === "Suspended") && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button
-                                                                    size="xs"
-                                                                    variant="outline"
-                                                                    onClick={() => triggerAction(sub.id, "deactivated")}
-                                                                    className="h-7 px-2.5 text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive hover:text-white"
-                                                                >
-                                                                    <Power size={12} /> Deactivate
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>Force deactivate {sub.customerName}</TooltipContent>
-                                                        </Tooltip>
-                                                    )}
-                                                </div>
+                                                <span className="text-xs text-muted-foreground">—</span>
                                             )}
                                         </TableCell>
                                     </TableRow>
@@ -368,23 +366,8 @@ export default function SubscriptionTable() {
                 <div className="px-5 py-3 border-t border-border flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">
                         Showing <span className="font-semibold text-foreground">{filtered.length}</span> of{" "}
-                        <span className="font-semibold text-foreground">{subscriptions.length}</span> subscriptions
+                        <span className="font-semibold text-foreground">{data.length}</span> subscriptions
                     </span>
-                    <div className="flex gap-1">
-                        {[1, 2, 3].map((p) => (
-                            <button
-                                key={p}
-                                className={cn(
-                                    "w-7 h-7 rounded-md text-xs font-medium border transition-colors",
-                                    p === 1
-                                        ? "border-primary bg-primary/10 text-primary"
-                                        : "border-border text-muted-foreground hover:border-primary/50 hover:text-primary"
-                                )}
-                            >
-                                {p}
-                            </button>
-                        ))}
-                    </div>
                 </div>
             </CardContent>
         </Card>
