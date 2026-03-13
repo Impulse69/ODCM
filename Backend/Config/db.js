@@ -5,11 +5,17 @@ const { Pool } = require('pg');
 
 let pool;
 try {
+	if (!process.env.PGUSER || !process.env.PGPASSWORD || !process.env.PGDATABASE) {
+		console.error('[FATAL] Missing required database environment variables (PGUSER, PGPASSWORD, PGDATABASE).');
+		console.error('Please create a .env file in the Backend directory. See .env.example for reference.');
+		process.exit(1);
+	}
+
 	pool = new Pool({
-		user: process.env.PGUSER || 'your_db_user',
+		user: process.env.PGUSER,
 		host: process.env.PGHOST || 'localhost',
-		database: process.env.PGDATABASE || 'your_db_name',
-		password: process.env.PGPASSWORD || 'your_db_password',
+		database: process.env.PGDATABASE,
+		password: process.env.PGPASSWORD,
 		port: process.env.PGPORT ? parseInt(process.env.PGPORT) : 5432,
 	});
 	// Test connection immediately
