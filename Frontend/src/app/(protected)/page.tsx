@@ -12,6 +12,7 @@ import VehiclesView from "@/components/VehiclesView";
 import SubscriptionsView from "@/components/SubscriptionsView";
 import RemovedView from "@/components/RemovedView";
 import PaymentHistoryView from "@/components/PaymentHistoryView";
+import InventoryView from "@/components/InventoryView";
 import ProfileView from "@/components/ProfileView";
 import SettingsView from "@/components/SettingsView";
 import RevenueChart from "@/components/RevenueChart";
@@ -108,6 +109,8 @@ export default function DashboardPage() {
           {activeSection === "removed" && <RemovedView />}
           {/* ── Payment History ────────────────────────────────────────────────── */}
           {activeSection === "payment-history" && <PaymentHistoryView />}
+          {/* ── Inventory ──────────────────────────────────────────────────────── */}
+          {activeSection === "inventory" && <InventoryView />}
           {/* ── Bulk Import ────────────────────────────────────────────────── */}
           {activeSection === "bulk-import" && (
             <div className="space-y-5">

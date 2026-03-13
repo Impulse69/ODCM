@@ -65,6 +65,15 @@ export interface SmsJobResult {
   removed: number;
 }
 
+export interface SmsLog {
+  id: number;
+  plate_number: string;
+  sms_status: 'Sent' | 'Failed';
+  sms_sent_at: string;
+  last_sms_type: string;
+  customer_name: string;
+}
+
 export interface EmailTestResult {
   message: string;
   accepted: string[];
@@ -109,3 +118,6 @@ export const runSmsJob = () =>
 
 export const getSmsStats = () =>
   request<SmsStats>('/api/sms/stats');
+
+export const getRecentSmsLogs = () =>
+  request<SmsLog[]>('/api/sms/recent-logs');
