@@ -874,4 +874,33 @@ async function getSmsStats(req, res) {
   }
 }
 
-module.exports = { getConfig, saveConfig, testSms, testEmail, sendSmsForVehicle, runSmsJob, getSmsStats, executeSmsJob };
+async function getRecentSmsLogs(req, res) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+        s.id, s.plate_number, s.sms_status, s.sms_sent_at, s.last_sms_type,
+        COALESCE(ic.name, co.company_name) AS customer_name
+       FROM subscriptions s
+       LEFT JOIN individual_customers ic ON ic.id = s.individual_customer_id
+       LEFT JOIN companies            co ON co.id = s.company_id
+       WHERE s.sms_sent_at IS NOT NULL
+       ORDER BY s.sms_sent_at DESC
+       LIMIT 20`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+module.exports = {
+  getConfig,
+  saveConfig,
+  testSms,
+  testEmail,
+  sendSmsForVehicle,
+  runSmsJob,
+  getSmsStats,
+  executeSmsJob,
+  getRecentSmsLogs,
+};

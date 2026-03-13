@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Bell, X, User, Settings, LogOut, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,41 +21,32 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
+import { getRecentSmsLogs } from "@/lib/sms-api";
 
-const mockNotifications = [
-  {
-    id: 1,
-    title: "Trakzee Sync Failed",
-    message: "API returned 503 for 3 vehicles. Retry scheduled.",
-    time: "2 min ago",
-    type: "error" as const,
-    unread: true,
-  },
-  {
-    id: 2,
-    title: "Bulk Import Complete",
-    message: "42 records imported successfully, 2 duplicates skipped.",
-    time: "15 min ago",
-    type: "success" as const,
-    unread: true,
-  },
-  {
-    id: 3,
-    title: "Deactivation Warning",
-    message: "17 vehicles pending deactivation due to overdue payments.",
-    time: "1 hr ago",
-    type: "warning" as const,
-    unread: false,
-  },
-  {
-    id: 4,
-    title: "API Rate Limit",
-    message: "Trakzee API rate limit approaching. 80% consumed.",
-    time: "3 hr ago",
-    type: "warning" as const,
-    unread: false,
-  },
-];
+interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  time: string;
+  type: "success" | "warning" | "error";
+  unread: boolean;
+}
+
+function timeAgo(dateStr: string) {
+  const date = new Date(dateStr);
+  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+  let interval = seconds / 31536000;
+  if (interval > 1) return Math.floor(interval) + " yr ago";
+  interval = seconds / 2592000;
+  if (interval > 1) return Math.floor(interval) + " mo ago";
+  interval = seconds / 86400;
+  if (interval > 1) return Math.floor(interval) + " day ago";
+  interval = seconds / 3600;
+  if (interval > 1) return Math.floor(interval) + " hr ago";
+  interval = seconds / 60;
+  if (interval > 1) return Math.floor(interval) + " min ago";
+  return Math.floor(seconds) + " sec ago";
+}
 
 const typeColors: Record<string, string> = {
   error: "bg-red-500",
@@ -73,7 +64,31 @@ export default function TopNav({
   sidebarWidth = 240,
 }: TopNavProps) {
   const { user, logout } = useAuth();
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const logs = await getRecentSmsLogs();
+      const mapped: Notification[] = logs.map(log => ({
+        id: log.id,
+        title: log.sms_status === 'Sent' ? 'SMS Sent Successfully' : 'SMS Delivery Failed',
+        message: `Plate: ${log.plate_number} — ${log.customer_name} (${log.last_sms_type})`,
+        time: timeAgo(log.sms_sent_at),
+        type: log.sms_status === 'Sent' ? 'success' : 'error',
+        unread: false, // For now, we don't have per-user unread state in DB
+      }));
+      setNotifications(mapped);
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  }, []);
+
+  // Fetch on mount and set up polling
+  useEffect(() => {
+    fetchNotifications();
+    const timer = setInterval(fetchNotifications, 60000); // Poll every minute
+    return () => clearInterval(timer);
+  }, [fetchNotifications]);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 

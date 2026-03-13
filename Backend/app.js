@@ -5,6 +5,7 @@ const { createTables } = require('./Models/Customer');
 const { createPlansTable } = require('./Models/Subscription');
 const { createPaymentHistoryTable } = require('./Models/PaymentHistory');
 const { createUsersTable, seedDefaultAdmin } = require('./Models/User');
+const { createInventoryTables } = require('./Models/Inventory');
 const { executeSmsJob } = require('./Controllers/SmsController');
 const customerRouter        = require('./Routers/customerRouter');
 const vehicleRouter         = require('./Routers/vehicleRouter');
@@ -13,6 +14,7 @@ const paymentHistoryRouter  = require('./Routers/paymentHistoryRouter');
 const bulkImportRouter      = require('./Routers/bulkImportRouter');
 const authRouter            = require('./Routers/authRouter');
 const smsRouter             = require('./Routers/smsRouter');
+const inventoryRouter       = require('./Routers/inventoryRouter');
 const { authenticateToken } = require('./middleware/authMiddleware');
 
 const app = express();
@@ -21,13 +23,14 @@ const PORT = process.env.PORT || 5000;
 app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
 
-app.use('/api/auth',      authRouter);
-app.use('/api/customers', authenticateToken, customerRouter);
-app.use('/api/vehicles',  authenticateToken, vehicleRouter);
-app.use('/api/plans',     authenticateToken, subscriptionRouter);
+app.use('/api/auth',          authRouter);
+app.use('/api/customers',     authenticateToken, customerRouter);
+app.use('/api/vehicles',      authenticateToken, vehicleRouter);
+app.use('/api/plans',         authenticateToken, subscriptionRouter);
 app.use('/api/payments',      authenticateToken, paymentHistoryRouter);
 app.use('/api/bulk-import',   authenticateToken, bulkImportRouter);
 app.use('/api/sms',           authenticateToken, smsRouter);
+app.use('/api/inventory',     authenticateToken, inventoryRouter);
 
 // Test route to check DB connection
 app.get('/api/test-db', async (req, res) => {
@@ -50,6 +53,7 @@ app.listen(PORT, async () => {
 		await createPlansTable();
 		await createPaymentHistoryTable();
 		await createUsersTable();
+		await createInventoryTables();
 		await seedDefaultAdmin();
 		console.log('Database tables synced.');
 	} catch (err) {

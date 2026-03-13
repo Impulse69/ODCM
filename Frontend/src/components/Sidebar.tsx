@@ -12,6 +12,7 @@ import {
     ChevronLeft,
     ChevronRight,
     History,
+    Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -32,6 +33,7 @@ const navItems: NavItem[] = [
     { id: "subscriptions", label: "Subscriptions", icon: <CreditCard size={20} />, section: "main", badge: 3 },
     { id: "removed", label: "Removed List", icon: <ShieldOff size={20} />, section: "main" },
     { id: "payment-history", label: "Payment History", icon: <History size={20} />, section: "main" },
+    { id: "inventory", label: "Inventory", icon: <Upload size={20} />, section: "main" },
     { id: "bulk-import", label: "Bulk Import", icon: <Upload size={20} />, section: "tools" },
 ];
 
