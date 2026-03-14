@@ -300,7 +300,7 @@ export default function InventoryView() {
 
     return (
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <div className="grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_1fr_40px] gap-3 px-6 py-3 border-b border-border bg-muted/30">
+        <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_1fr_40px] gap-3 px-6 py-3 border-b border-border bg-muted/30">
           {["CATEGORY", "IMEI NUMBER", "TYPE", "STOCK", "DATE ADDED", ""].map((col) => (
             <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
           ))}
@@ -312,44 +312,48 @@ export default function InventoryView() {
           <div className="py-12 text-center text-sm text-muted-foreground">No items in stock.</div>
         ) : (
           <div className="divide-y divide-border">
-            {pageData.map(item => (
-              <div key={item.id} className="grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_1fr_40px] gap-3 items-center px-6 py-4 hover:bg-muted/30 transition-colors">
-                <Badge variant="outline" className="w-fit bg-secondary text-secondary-foreground">{item.category}</Badge>
-                <span className="font-mono text-sm">{item.imei_number}</span>
-                <span className="font-medium text-sm">{item.type}</span>
-                <span className={cn("font-bold text-sm", item.quantity === 0 ? "text-destructive" : "text-emerald-600")}>
-                  {item.quantity}
-                </span>
-                <span className="text-sm text-muted-foreground">{formatDate(item.created_at)}</span>
-
+            {pageData.map(item => {
+              const itemActions = (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground"><MoreHorizontal size={15} /></Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      className="text-xs cursor-pointer text-blue-600 focus:text-blue-600"
-                      onClick={() => handleOpenUseForm(item)}
-                      disabled={item.quantity <= 0}
-                    >
-                      Use Item
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-xs cursor-pointer"
-                      onClick={() => { setItemForm({ ...item, quantity: String(item.quantity) }); setShowItemForm(true); }}
-                    >
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-xs cursor-pointer text-destructive focus:text-destructive"
-                      onClick={() => setDeleteTarget(item.id)}
-                    >
-                      Delete
-                    </DropdownMenuItem>
+                    <DropdownMenuItem className="text-xs cursor-pointer text-blue-600 focus:text-blue-600" onClick={() => handleOpenUseForm(item)} disabled={item.quantity <= 0}>Use Item</DropdownMenuItem>
+                    <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => { setItemForm({ ...item, quantity: String(item.quantity) }); setShowItemForm(true); }}>Edit</DropdownMenuItem>
+                    <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => setDeleteTarget(item.id)}>Delete</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              );
+              return (
+              <div key={item.id} className="hover:bg-muted/30 transition-colors">
+                {/* Desktop */}
+                <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_1fr_40px] gap-3 items-center px-6 py-4">
+                  <Badge variant="outline" className="w-fit bg-secondary text-secondary-foreground">{item.category}</Badge>
+                  <span className="font-mono text-sm">{item.imei_number}</span>
+                  <span className="font-medium text-sm">{item.type}</span>
+                  <span className={cn("font-bold text-sm", item.quantity === 0 ? "text-destructive" : "text-emerald-600")}>{item.quantity}</span>
+                  <span className="text-sm text-muted-foreground">{formatDate(item.created_at)}</span>
+                  {itemActions}
+                </div>
+                {/* Mobile */}
+                <div className="sm:hidden px-4 py-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{item.type}</p>
+                      <p className="font-mono text-xs text-muted-foreground truncate">{item.imei_number}</p>
+                    </div>
+                    {itemActions}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <Badge variant="outline" className="text-[0.65rem] bg-secondary text-secondary-foreground">{item.category}</Badge>
+                    <span className={cn("font-bold", item.quantity === 0 ? "text-destructive" : "text-emerald-600")}>Stock: {item.quantity}</span>
+                    <span className="text-muted-foreground ml-auto">{formatDate(item.created_at)}</span>
+                  </div>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
         {/* Pagination omitted for brevity, same pattern as VehiclesView */}
@@ -376,7 +380,7 @@ export default function InventoryView() {
 
     return (
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <div className="grid grid-cols-[1fr_1.5fr_1fr_1.5fr_0.8fr_1fr] gap-3 px-6 py-3 border-b border-border bg-muted/30">
+        <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1fr_1.5fr_0.8fr_1fr] gap-3 px-6 py-3 border-b border-border bg-muted/30">
           {["CATEGORY", "IMEI NUMBER", "TYPE", "INSTALLED BY", "QTY", "DATE USED"].map((col) => (
             <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
           ))}
@@ -389,13 +393,29 @@ export default function InventoryView() {
         ) : (
           <div className="divide-y divide-border">
             {pageData.map(u => (
-              <div key={u.id} className="grid grid-cols-[1fr_1.5fr_1fr_1.5fr_0.8fr_1fr] gap-3 items-center px-6 py-4 hover:bg-muted/30 transition-colors">
-                <Badge variant="outline" className="w-fit">{u.category}</Badge>
-                <span className="font-mono text-sm text-muted-foreground truncate">{u.imei_number}</span>
-                <span className="text-sm font-medium truncate">{u.type}</span>
-                <span className="text-sm font-semibold truncate text-foreground">{u.installed_by}</span>
-                <span className="font-bold text-sm text-amber-600">-{u.quantity_used}</span>
-                <span className="text-sm text-muted-foreground">{formatDate(u.used_at)}</span>
+              <div key={u.id} className="hover:bg-muted/30 transition-colors">
+                {/* Desktop */}
+                <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1fr_1.5fr_0.8fr_1fr] gap-3 items-center px-6 py-4">
+                  <Badge variant="outline" className="w-fit">{u.category}</Badge>
+                  <span className="font-mono text-sm text-muted-foreground truncate">{u.imei_number}</span>
+                  <span className="text-sm font-medium truncate">{u.type}</span>
+                  <span className="text-sm font-semibold truncate text-foreground">{u.installed_by}</span>
+                  <span className="font-bold text-sm text-amber-600">-{u.quantity_used}</span>
+                  <span className="text-sm text-muted-foreground">{formatDate(u.used_at)}</span>
+                </div>
+                {/* Mobile */}
+                <div className="sm:hidden px-4 py-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium text-sm">{u.type}</p>
+                    <span className="font-bold text-sm text-amber-600">-{u.quantity_used}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <Badge variant="outline" className="text-[0.65rem]">{u.category}</Badge>
+                    <span className="text-muted-foreground truncate">{u.installed_by}</span>
+                    <span className="text-muted-foreground ml-auto">{formatDate(u.used_at)}</span>
+                  </div>
+                  <p className="font-mono text-xs text-muted-foreground truncate">{u.imei_number}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -419,7 +439,7 @@ export default function InventoryView() {
   return (
     <div className="space-y-5 pt-6">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Inventory Management</h1>
         <div className="flex gap-2">
           {activeTab === "stock" ? (
@@ -436,7 +456,7 @@ export default function InventoryView() {
 
       {/* ── KPIs (Only on stock tab) ── */}
       {activeTab === "stock" && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-card border border-border rounded-xl px-5 py-4 shadow-sm flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0"><Package size={20} /></div>
             <div>
@@ -462,7 +482,7 @@ export default function InventoryView() {
       )}
 
       {/* ── Tabs & Search ── */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center bg-muted/50 p-1 rounded-xl border border-border text-sm">
           <button
             onClick={() => setActiveTab("stock")}
@@ -478,7 +498,7 @@ export default function InventoryView() {
           </button>
         </div>
 
-        <div className="relative w-72">
+        <div className="relative w-full sm:w-72">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             value={activeTab === "stock" ? stockSearch : usageSearch}

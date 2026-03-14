@@ -78,6 +78,7 @@ async function sendAdminEmail({ cfg, expiredList }) {
     const amount = v.monthly_amount ? `${currency}${Number(v.monthly_amount).toFixed(2)}` : 'N/A';
     return `    <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0">${v.customer_name}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0">${v.phone || '-'}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-family:monospace">${v.plate_number}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0">${new Date(v.expiry_date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#e53e3e;font-weight:600">${amount}</td>
@@ -97,6 +98,7 @@ async function sendAdminEmail({ cfg, expiredList }) {
     <thead style="background:#fff5f5">
       <tr>
         <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#718096">Customer</th>
+        <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#718096">Phone</th>
         <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#718096">Plate</th>
         <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#718096">Expired</th>
         <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#718096">Amount Owed</th>
@@ -226,6 +228,7 @@ function buildWeeklySummaryEmailHtml(weeklyExpired, now, options = {}) {
     ? weeklyExpired.map((v) => `
       <tr>
         <td style="padding:10px 12px;border-bottom:1px solid #eef2f7">${v.customer_name || '-'}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #eef2f7">${v.phone || '-'}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;font-family:Consolas,monospace">${v.plate_number || '-'}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eef2f7">${new Date(v.expiry_date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;color:#b91c1c;font-weight:700">${formatMoney(v.monthly_amount)}</td>
@@ -274,6 +277,7 @@ function buildWeeklySummaryEmailHtml(weeklyExpired, now, options = {}) {
         <thead style="background:#0f172a;color:#fff">
           <tr>
             <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Customer</th>
+            <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Phone</th>
             <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Plate</th>
             <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Expired</th>
             <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Amount Owed</th>
@@ -309,11 +313,12 @@ function buildWeeklySummaryPdfBuffer(weeklyExpired, now) {
     const tableTopStart = 164;
     const pageBottom = doc.page.height - 40;
     const columns = [
-      { key: 'customer_name', label: 'Customer', width: 185, align: 'left' },
-      { key: 'plate_number',  label: 'Plate',    width: 80,  align: 'left' },
-      { key: 'expiry_date',   label: 'Expired',  width: 80,  align: 'left' },
-      { key: 'amount',        label: 'Amount',   width: 100, align: 'right' },
-      { key: 'sms',           label: 'SMS',      width: 70,  align: 'center' },
+      { key: 'customer_name', label: 'Customer', width: 155, align: 'left' },
+      { key: 'phone',         label: 'Phone',    width: 65,  align: 'left' },
+      { key: 'plate_number',  label: 'Plate',    width: 70,  align: 'left' },
+      { key: 'expiry_date',   label: 'Expired',  width: 70,  align: 'left' },
+      { key: 'amount',        label: 'Amount',   width: 90,  align: 'right' },
+      { key: 'sms',           label: 'SMS',      width: 65,  align: 'center' },
     ];
 
     const drawTop = () => {
@@ -325,7 +330,7 @@ function buildWeeklySummaryPdfBuffer(weeklyExpired, now) {
         .text(`Week ${weekStart.toLocaleDateString('en-GB')} - ${now.toLocaleDateString('en-GB')}`, pageLeft + 14, 82);
       doc.fillColor('#0f172a');
       doc.font('Helvetica-Bold').fontSize(11).text(`Total Vehicles: ${weeklyExpired.length}`, pageLeft, 116);
-      doc.text(`Total Outstanding: GH₵${totalOwed.toFixed(2)}`, pageLeft + 220, 116);
+      doc.text(`Total Outstanding: GHS ${totalOwed.toFixed(2)}`, pageLeft + 220, 116);
       doc.font('Helvetica').fontSize(9).fillColor('#475569')
         .text(`Generated: ${now.toLocaleString('en-GB')}`, pageLeft, 136);
       doc.restore();
@@ -375,7 +380,8 @@ function buildWeeklySummaryPdfBuffer(weeklyExpired, now) {
       doc.rect(pageLeft, y, tableWidth, rowHeight).stroke('#e2e8f0');
 
       const row = {
-        customer_name: rowText(v.customer_name, 38),
+        customer_name: rowText(v.customer_name, 32),
+        phone: rowText(v.phone, 15),
         plate_number: rowText(v.plate_number, 16),
         expiry_date: new Date(v.expiry_date).toLocaleDateString('en-GB'),
         amount: formatMoneyPdf(v.monthly_amount),
@@ -470,6 +476,7 @@ async function getConfig(req, res) {
           'Dear {customerName}, your vehicle ({vehiclePlate}) subscription has expired. Please contact us immediately to renew. - ODG',
         firstReminderDays:  parseInt(cfg.first_reminder_days  || '14'),
         secondReminderDays: parseInt(cfg.second_reminder_days || '7'),
+        thirdReminderDays:  parseInt(cfg.third_reminder_days  || '3'),
         adminEmail:         cfg.admin_email   || '',
         smtpHost:           cfg.smtp_host     || '',
         smtpPort:           cfg.smtp_port     || '587',
@@ -490,7 +497,7 @@ async function saveConfig(req, res) {
       clientId, clientSecret, senderId,
       dueSoonEnabled, expiredEnabled,
       dueSoonTemplate, expiredTemplate,
-      firstReminderDays, secondReminderDays,
+      firstReminderDays, secondReminderDays, thirdReminderDays,
     } = req.body;
 
     if (clientId          !== undefined) await upsertSetting('client_id',           clientId);
@@ -502,6 +509,7 @@ async function saveConfig(req, res) {
     if (expiredTemplate   !== undefined) await upsertSetting('expired_template',    expiredTemplate);
     if (firstReminderDays  !== undefined) await upsertSetting('first_reminder_days',  String(firstReminderDays));
     if (secondReminderDays !== undefined) await upsertSetting('second_reminder_days', String(secondReminderDays));
+    if (thirdReminderDays  !== undefined) await upsertSetting('third_reminder_days',  String(thirdReminderDays));
 
     const { adminEmail, smtpHost, smtpPort, smtpUser, smtpPass } = req.body;
     const trimmedAdminEmail = adminEmail === undefined ? undefined : String(adminEmail).trim();
@@ -711,6 +719,7 @@ async function executeSmsJob() {
 
   const firstDays      = parseInt(cfg.first_reminder_days  || '14');
   const secondDays     = parseInt(cfg.second_reminder_days || '7');
+  const thirdDays      = parseInt(cfg.third_reminder_days  || '3');
   const dueSoonEnabled = cfg.due_soon_enabled !== 'false';
   const expiredEnabled = cfg.expired_enabled  !== 'false';
 
@@ -787,19 +796,25 @@ async function executeSmsJob() {
     if (!dueSoonEnabled || daysLeft > firstDays) { results.skipped++; continue; }
 
     let shouldSend = false;
+    let smsTypeToSave = 'due_soon_1';
 
-    if (v.sms_status === 'Failed') {
-      // Always retry immediately if the last attempt failed
-      shouldSend = true;
-    } else if (v.last_sms_type !== 'due_soon') {
-      // No due_soon reminder sent yet this cycle — send the first one
-      shouldSend = true;
-    } else if (daysLeft <= secondDays) {
-      // First reminder already sent and succeeded; fire second reminder once
-      // we enter the final window and at least 1 day has passed since last SMS
-      const sentAt        = v.sms_sent_at ? new Date(v.sms_sent_at) : null;
-      const daysSinceSent = sentAt ? Math.round((today - sentAt) / 86400000) : 999;
-      if (daysSinceSent >= 1) shouldSend = true;
+    // Figure out which phase we are in based on exact daysLeft
+    // and whether we've already sent that specific phase.
+    if (daysLeft === firstDays) {
+      if (v.last_sms_type !== 'due_soon_1' || v.sms_status === 'Failed') {
+        shouldSend = true;
+        smsTypeToSave = 'due_soon_1';
+      }
+    } else if (daysLeft === secondDays) {
+      if (v.last_sms_type !== 'due_soon_2' || v.sms_status === 'Failed') {
+        shouldSend = true;
+        smsTypeToSave = 'due_soon_2';
+      }
+    } else if (daysLeft === thirdDays) {
+      if (v.last_sms_type !== 'due_soon_3' || v.sms_status === 'Failed') {
+        shouldSend = true;
+        smsTypeToSave = 'due_soon_3';
+      }
     }
 
     if (!shouldSend) { results.skipped++; continue; }
@@ -823,9 +838,9 @@ async function executeSmsJob() {
     const newStatus = result.success ? 'Sent' : 'Failed';
     await pool.query(
       `UPDATE subscriptions
-       SET sms_status = $1, sms_sent_at = NOW(), last_sms_type = 'due_soon', updated_at = NOW()
-       WHERE id = $2`,
-      [newStatus, v.id],
+       SET sms_status = $1, sms_sent_at = NOW(), last_sms_type = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [newStatus, smsTypeToSave, v.id],
     );
 
     if (result.success) {
@@ -864,7 +879,7 @@ async function getSmsStats(req, res) {
          COUNT(*) FILTER (WHERE sms_status = 'Sent')                                       AS total_sent,
          COUNT(*) FILTER (WHERE sms_status = 'Failed')                                     AS total_failed,
          COUNT(*) FILTER (WHERE sms_status = 'Sent' AND DATE(sms_sent_at) = CURRENT_DATE)  AS sent_today,
-         COUNT(*) FILTER (WHERE sms_status = 'Sent' AND last_sms_type = 'due_soon')        AS due_soon_sent,
+         COUNT(*) FILTER (WHERE sms_status = 'Sent' AND last_sms_type LIKE 'due_soon%')    AS due_soon_sent,
          COUNT(*) FILTER (WHERE sms_status = 'Sent' AND last_sms_type = 'expired')         AS expired_sent
        FROM subscriptions`,
     );

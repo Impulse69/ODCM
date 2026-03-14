@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // On mount, restore the active section from the URL (?section=...)
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function DashboardPage() {
   // Navigate: update state AND URL so refresh lands on the same section
   const handleNavigate = useCallback((section: string) => {
     setActiveSection(section);
+    setMobileMenuOpen(false);
     router.replace(`/?section=${section}`, { scroll: false });
   }, [router]);
 
@@ -52,21 +54,24 @@ export default function DashboardPage() {
       <Sidebar
         activeSection={activeSection}
         onNavigate={handleNavigate}
+        mobileOpen={mobileMenuOpen}
+        onMobileClose={() => setMobileMenuOpen(false)}
       />
 
       {/* Main area */}
       <div
-        className="flex flex-col min-h-screen transition-all duration-300 ease-in-out"
-        style={{ marginLeft: sidebarWidth }}
+        className="flex flex-col min-h-screen transition-all duration-300 ease-in-out md:ml-[var(--sidebar-width)] ml-0"
+        style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
       >
         {/* Top Nav */}
         <TopNav
           onNavigate={handleNavigate}
           sidebarWidth={sidebarWidth}
+          onMobileMenuToggle={() => setMobileMenuOpen((v) => !v)}
         />
 
         {/* Page content — pushed below fixed header */}
-        <main className="flex-1 pt-16 p-6 space-y-6">
+        <main className="flex-1 pt-16 p-3 sm:p-6 space-y-6">
           {/* ── Dashboard ──────────────────────────────────────────────────── */}
           {activeSection === "dashboard" && (
             <div className="space-y-6">

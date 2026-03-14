@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Bell, X, User, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Bell, X, User, Settings, LogOut, ChevronDown, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -57,11 +57,13 @@ const typeColors: Record<string, string> = {
 interface TopNavProps {
   onNavigate?: (section: string) => void;
   sidebarWidth?: number;
+  onMobileMenuToggle?: () => void;
 }
 
 export default function TopNav({
   onNavigate,
   sidebarWidth = 240,
+  onMobileMenuToggle,
 }: TopNavProps) {
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -102,10 +104,19 @@ export default function TopNav({
 
   return (
     <header
-      className="fixed top-0 right-0 z-30 flex items-center justify-between h-16 bg-card border-b border-border px-6 gap-4"
-      style={{ left: sidebarWidth, transition: "left 0.3s ease" }}
+      className="fixed top-0 right-0 z-30 flex items-center justify-between h-16 bg-card border-b border-border px-4 sm:px-6 gap-4 left-0 md:left-[var(--sidebar-width)]"
+      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
     >
-      {/* ── Search removed — per-view search bars used instead ── */}
+      {/* Mobile hamburger */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="md:hidden text-muted-foreground hover:text-foreground"
+        onClick={onMobileMenuToggle}
+        aria-label="Open menu"
+      >
+        <Menu size={20} />
+      </Button>
 
       {/* ── Right controls ── */}
       <div className="flex items-center gap-2 ml-auto">

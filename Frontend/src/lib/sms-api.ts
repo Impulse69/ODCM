@@ -37,6 +37,7 @@ export interface SmsConfig {
   expiredTemplate: string;
   firstReminderDays: number;
   secondReminderDays: number;
+  thirdReminderDays: number;
   adminEmail: string;
   smtpHost: string;
   smtpPort: string;

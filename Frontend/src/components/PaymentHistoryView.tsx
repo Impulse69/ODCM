@@ -122,7 +122,7 @@ export default function PaymentHistoryView() {
             {/* ── Table ── */}
             <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
                 {/* Column headers */}
-                <div className="grid grid-cols-[1fr_1.5fr_0.8fr_0.8fr_0.8fr_1fr_0.9fr] gap-4 px-6 py-3 border-b border-border bg-muted/30">
+                <div className="hidden sm:grid grid-cols-[1fr_1.5fr_0.8fr_0.8fr_0.8fr_1fr_0.9fr] gap-4 px-6 py-3 border-b border-border bg-muted/30">
                     {["DATE", "OWNER", "VEHICLE PLATE", "YEAR", "MONTHS", "AMOUNT (GH₵)", "OWNER TYPE"].map((col) => (
                         <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
                     ))}
@@ -141,54 +141,48 @@ export default function PaymentHistoryView() {
                 ) : (
                     <div className="divide-y divide-border">
                         {pageRecords.map((r) => (
-                            <div
-                                key={r.id}
-                                className="grid grid-cols-[1fr_1.5fr_0.8fr_0.8fr_0.8fr_1fr_0.9fr] gap-4 items-center px-6 py-4 hover:bg-muted/30 transition-colors"
-                            >
-                                {/* Date */}
-                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                    <Calendar size={12} className="shrink-0" />
-                                    {new Date(r.paidAt).toLocaleDateString("en-GB", {
-                                        day: "2-digit", month: "short", year: "numeric",
-                                    })}
-                                </div>
-
-                                {/* Owner */}
-                                <div className="min-w-0">
+                            <div key={r.id} className="hover:bg-muted/30 transition-colors">
+                                {/* Desktop */}
+                                <div className="hidden sm:grid grid-cols-[1fr_1.5fr_0.8fr_0.8fr_0.8fr_1fr_0.9fr] gap-4 items-center px-6 py-4">
+                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                        <Calendar size={12} className="shrink-0" />
+                                        {new Date(r.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <User size={12} className="text-muted-foreground shrink-0" />
+                                            <span className="font-semibold text-sm text-foreground truncate">{r.ownerName}</span>
+                                        </div>
+                                    </div>
                                     <div className="flex items-center gap-1.5">
-                                        <User size={12} className="text-muted-foreground shrink-0" />
-                                        <span className="font-semibold text-sm text-foreground truncate">{r.ownerName}</span>
+                                        <Car size={12} className="text-muted-foreground shrink-0" />
+                                        <span className="font-bold text-sm text-foreground">{r.vehiclePlate}</span>
+                                    </div>
+                                    <span className="text-sm text-foreground font-medium">{r.year}</span>
+                                    <span className="text-sm text-foreground font-medium">{r.months} mo</span>
+                                    <span className="text-sm font-bold text-emerald-600">GH₵{r.amountGhs.toLocaleString()}</span>
+                                    <div>
+                                        <Badge variant="outline" className={cn("text-[0.7rem] font-semibold px-2.5 py-0.5 capitalize", r.ownerType === "company" ? "bg-violet-50 text-violet-700 border-violet-200" : "bg-blue-50 text-blue-700 border-blue-200")}>
+                                            {r.ownerType}
+                                        </Badge>
                                     </div>
                                 </div>
-
-                                {/* Vehicle plate */}
-                                <div className="flex items-center gap-1.5">
-                                    <Car size={12} className="text-muted-foreground shrink-0" />
-                                    <span className="font-bold text-sm text-foreground">{r.vehiclePlate}</span>
-                                </div>
-
-                                {/* Year */}
-                                <span className="text-sm text-foreground font-medium">{r.year}</span>
-
-                                {/* Months */}
-                                <span className="text-sm text-foreground font-medium">{r.months} mo</span>
-
-                                {/* Amount */}
-                                <span className="text-sm font-bold text-emerald-600">GH₵{r.amountGhs.toLocaleString()}</span>
-
-                                {/* Owner type */}
-                                <div>
-                                    <Badge
-                                        variant="outline"
-                                        className={cn(
-                                            "text-[0.7rem] font-semibold px-2.5 py-0.5 capitalize",
-                                            r.ownerType === "company"
-                                                ? "bg-violet-50 text-violet-700 border-violet-200"
-                                                : "bg-blue-50 text-blue-700 border-blue-200"
-                                        )}
-                                    >
-                                        {r.ownerType}
-                                    </Badge>
+                                {/* Mobile */}
+                                <div className="sm:hidden px-4 py-3 space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold text-sm text-foreground truncate">{r.ownerName}</span>
+                                        <span className="font-bold text-sm text-emerald-600">GH₵{r.amountGhs.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <span className="flex items-center gap-1 text-muted-foreground"><Car size={10} /> {r.vehiclePlate}</span>
+                                        <span className="text-muted-foreground">{r.months} mo · {r.year}</span>
+                                        <Badge variant="outline" className={cn("text-[0.6rem] font-semibold px-1.5 py-0 capitalize ml-auto", r.ownerType === "company" ? "bg-violet-50 text-violet-700 border-violet-200" : "bg-blue-50 text-blue-700 border-blue-200")}>
+                                            {r.ownerType}
+                                        </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        {new Date(r.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                                    </p>
                                 </div>
                             </div>
                         ))}
