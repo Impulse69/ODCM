@@ -40,9 +40,11 @@ const navItems: NavItem[] = [
 interface SidebarProps {
     activeSection: string;
     onNavigate: (section: string) => void;
+    mobileOpen?: boolean;
+    onMobileClose?: () => void;
 }
 
-export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
+export default function Sidebar({ activeSection, onNavigate, mobileOpen, onMobileClose }: SidebarProps) {
     const [collapsed, setCollapsed] = useState(false);
 
     const mainItems = navItems.filter((n) => n.section === "main");
@@ -52,7 +54,7 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
         const isActive = activeSection === item.id;
         const btn = (
             <button
-                onClick={() => onNavigate(item.id)}
+                onClick={() => { onNavigate(item.id); onMobileClose?.(); }}
                 className={cn(
                     "w-full flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 relative group",
                     collapsed ? "justify-center px-0" : "px-3",
@@ -105,8 +107,16 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
     };
 
     return (
+        <>
+        {/* Mobile backdrop */}
+        {mobileOpen && (
+            <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={onMobileClose} />
+        )}
         <aside
-            className="fixed top-0 left-0 z-40 flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out"
+            className={cn(
+                "fixed top-0 left-0 z-50 flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out",
+                mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+            )}
             style={{ width: collapsed ? 68 : 240 }}
         >
             {/* ── Logo ── */}
@@ -179,5 +189,6 @@ export default function Sidebar({ activeSection, onNavigate }: SidebarProps) {
                 )}
             </div>
         </aside>
+        </>
     );
 }

@@ -180,9 +180,9 @@ export default function CustomersView() {
             </div>
 
             {/* â”€â”€ Tabs + Search + Add â”€â”€ */}
-            <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                 {/* Underline tabs */}
-                <div className="flex items-end gap-1 border-b border-border">
+                <div className="flex items-end gap-1 border-b border-border w-full sm:w-auto">
                     {(["individuals", "companies"] as const).map((t) => (
                         <button
                             key={t}
@@ -200,14 +200,14 @@ export default function CustomersView() {
                 </div>
 
                 {/* Search + Add */}
-                <div className="flex items-center gap-3">
-                    <div className="relative">
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:flex-none">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <input
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search"
-                            className="pl-9 pr-4 h-9 text-sm rounded-lg border border-border bg-background w-48 focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+                            className="pl-9 pr-4 h-9 text-sm rounded-lg border border-border bg-background w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
                         />
                     </div>
                     <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -268,8 +268,8 @@ export default function CustomersView() {
 
             {/* â”€â”€ Table â”€â”€ */}
             <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                {/* Column headers */}
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_40px] gap-4 px-6 py-3 border-b border-border bg-muted/30">
+                {/* Column headers — hidden on mobile */}
+                <div className="hidden sm:grid grid-cols-[2fr_1fr_1fr_1fr_40px] gap-4 px-6 py-3 border-b border-border bg-muted/30">
                     {["CUSTOMER INFO", "VEHICLES", "STATUS", "TOTAL OWED", "ACTIONS"].map((col) => (
                         <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
                     ))}
@@ -288,49 +288,88 @@ export default function CustomersView() {
                                 const status = priorityToStatus[c.worst_priority] ?? "Active";
                                 const isNegative = status === "Suspended" || status === "Overdue";
                                 return (
-                                    <div key={c.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_40px] gap-4 items-center px-6 py-4 group hover:bg-muted/30 transition-colors">
-                                        {/* Customer info */}
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <Avatar className="w-10 h-10 shrink-0">
-                                            <AvatarFallback className={`bg-linear-to-br ${avatarColors[i % avatarColors.length]} text-white text-xs font-bold`}>
-                                                    {c.initials}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="min-w-0">
-                                                <p className="font-semibold text-sm text-foreground truncate">{c.name}</p>
-                                                <p className="text-xs text-muted-foreground mt-0.5">{c.phone}</p>
+                                    <div key={c.id} className="group hover:bg-muted/30 transition-colors">
+                                        {/* Desktop row */}
+                                        <div className="hidden sm:grid grid-cols-[2fr_1fr_1fr_1fr_40px] gap-4 items-center px-6 py-4">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <Avatar className="w-10 h-10 shrink-0">
+                                                <AvatarFallback className={`bg-linear-to-br ${avatarColors[i % avatarColors.length]} text-white text-xs font-bold`}>
+                                                        {c.initials}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold text-sm text-foreground truncate">{c.name}</p>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">{c.phone}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                                <Car size={13} className="shrink-0" />
+                                                <span>{c.vehicle_count} vehicle{c.vehicle_count !== 1 ? "s" : ""}</span>
+                                            </div>
+                                            <div>
+                                                <Badge variant="outline" className={cn("text-[0.7rem] font-semibold px-2.5 py-0.5", statusColors[status] ?? "")}>
+                                                    {status}
+                                                </Badge>
+                                            </div>
+                                            <p className={cn("text-sm font-semibold tabular-nums", isNegative ? "text-red-500" : "text-foreground")}>
+                                                ${Number(c.total_monthly).toFixed(2)}
+                                            </p>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground">
+                                                        <MoreHorizontal size={15} />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-40">
+                                                    <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSelectedIndividual(c.id)}>View Vehicles</DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openEditIndividual(c)}>Edit Details</DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => setConfirmDelete({ id: c.id, name: c.name, type: "individual" })}>
+                                                        <Trash2 size={12} className="mr-1" /> Delete Customer
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                        {/* Mobile card */}
+                                        <div className="sm:hidden px-4 py-3 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <Avatar className="w-9 h-9 shrink-0">
+                                                        <AvatarFallback className={`bg-linear-to-br ${avatarColors[i % avatarColors.length]} text-white text-[0.6rem] font-bold`}>
+                                                            {c.initials}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="min-w-0">
+                                                        <p className="font-semibold text-sm text-foreground truncate">{c.name}</p>
+                                                        <p className="text-xs text-muted-foreground">{c.phone}</p>
+                                                    </div>
+                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground">
+                                                            <MoreHorizontal size={15} />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-40">
+                                                        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSelectedIndividual(c.id)}>View Vehicles</DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openEditIndividual(c)}>Edit Details</DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => setConfirmDelete({ id: c.id, name: c.name, type: "individual" })}>
+                                                            <Trash2 size={12} className="mr-1" /> Delete Customer
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-xs">
+                                                <div className="flex items-center gap-1 text-muted-foreground">
+                                                    <Car size={11} /> {c.vehicle_count} vehicle{c.vehicle_count !== 1 ? "s" : ""}
+                                                </div>
+                                                <Badge variant="outline" className={cn("text-[0.65rem] font-semibold px-2 py-0", statusColors[status] ?? "")}>
+                                                    {status}
+                                                </Badge>
+                                                <span className={cn("font-semibold tabular-nums ml-auto", isNegative ? "text-red-500" : "text-foreground")}>
+                                                    ${Number(c.total_monthly).toFixed(2)}
+                                                </span>
                                             </div>
                                         </div>
-                                        {/* Vehicles */}
-                                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                            <Car size={13} className="shrink-0" />
-                                            <span>{c.vehicle_count} vehicle{c.vehicle_count !== 1 ? "s" : ""}</span>
-                                        </div>
-                                        {/* Status */}
-                                        <div>
-                                            <Badge variant="outline" className={cn("text-[0.7rem] font-semibold px-2.5 py-0.5", statusColors[status] ?? "")}>
-                                                {status}
-                                            </Badge>
-                                        </div>
-                                        {/* Total owed */}
-                                        <p className={cn("text-sm font-semibold tabular-nums", isNegative ? "text-red-500" : "text-foreground")}>
-                                            ${Number(c.total_monthly).toFixed(2)}
-                                        </p>
-                                        {/* Actions */}
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground">
-                                                    <MoreHorizontal size={15} />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-40">
-                                                <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSelectedIndividual(c.id)}>View Vehicles</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openEditIndividual(c)}>Edit Details</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => setConfirmDelete({ id: c.id, name: c.name, type: "individual" })}>
-                                                    <Trash2 size={12} className="mr-1" /> Delete Customer
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
                                     </div>
                                 );
                             })
@@ -339,44 +378,88 @@ export default function CustomersView() {
                                 const isNegative = status === "Suspended" || status === "Overdue";
                                 const initials = co.company_name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
                                 return (
-                                    <div key={co.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_40px] gap-4 items-center px-6 py-4 group hover:bg-muted/30 transition-colors">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <Avatar className="w-10 h-10 shrink-0">
-                                                <AvatarFallback className={`bg-linear-to-br ${avatarColors[i % avatarColors.length]} text-white text-xs font-bold`}>
-                                                    {initials}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="min-w-0">
-                                                <p className="font-semibold text-sm text-foreground truncate">{co.company_name}</p>
-                                                <p className="text-xs text-muted-foreground mt-0.5">{co.contact_phone}</p>
+                                    <div key={co.id} className="group hover:bg-muted/30 transition-colors">
+                                        {/* Desktop row */}
+                                        <div className="hidden sm:grid grid-cols-[2fr_1fr_1fr_1fr_40px] gap-4 items-center px-6 py-4">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <Avatar className="w-10 h-10 shrink-0">
+                                                    <AvatarFallback className={`bg-linear-to-br ${avatarColors[i % avatarColors.length]} text-white text-xs font-bold`}>
+                                                        {initials}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold text-sm text-foreground truncate">{co.company_name}</p>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">{co.contact_phone}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                                <Car size={13} className="shrink-0" />
+                                                <span>{co.vehicle_count} vehicle{co.vehicle_count !== 1 ? "s" : ""}</span>
+                                            </div>
+                                            <div>
+                                                <Badge variant="outline" className={cn("text-[0.7rem] font-semibold px-2.5 py-0.5", statusColors[status] ?? "")}>
+                                                    {status}
+                                                </Badge>
+                                            </div>
+                                            <p className={cn("text-sm font-semibold tabular-nums", isNegative ? "text-red-500" : "text-foreground")}>
+                                                ${Number(co.total_monthly).toFixed(2)}
+                                            </p>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground">
+                                                        <MoreHorizontal size={15} />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-40">
+                                                    <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSelectedCompany(co.id)}>View Vehicles</DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openEditCompany(co)}>Edit Details</DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => setConfirmDelete({ id: co.id, name: co.company_name, type: "company" })}>
+                                                        <Trash2 size={12} className="mr-1" /> Delete Customer
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                        {/* Mobile card */}
+                                        <div className="sm:hidden px-4 py-3 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <Avatar className="w-9 h-9 shrink-0">
+                                                        <AvatarFallback className={`bg-linear-to-br ${avatarColors[i % avatarColors.length]} text-white text-[0.6rem] font-bold`}>
+                                                            {initials}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="min-w-0">
+                                                        <p className="font-semibold text-sm text-foreground truncate">{co.company_name}</p>
+                                                        <p className="text-xs text-muted-foreground">{co.contact_phone}</p>
+                                                    </div>
+                                                </div>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground">
+                                                            <MoreHorizontal size={15} />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-40">
+                                                        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSelectedCompany(co.id)}>View Vehicles</DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openEditCompany(co)}>Edit Details</DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => setConfirmDelete({ id: co.id, name: co.company_name, type: "company" })}>
+                                                            <Trash2 size={12} className="mr-1" /> Delete Customer
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-xs">
+                                                <div className="flex items-center gap-1 text-muted-foreground">
+                                                    <Car size={11} /> {co.vehicle_count} vehicle{co.vehicle_count !== 1 ? "s" : ""}
+                                                </div>
+                                                <Badge variant="outline" className={cn("text-[0.65rem] font-semibold px-2 py-0", statusColors[status] ?? "")}>
+                                                    {status}
+                                                </Badge>
+                                                <span className={cn("font-semibold tabular-nums ml-auto", isNegative ? "text-red-500" : "text-foreground")}>
+                                                    ${Number(co.total_monthly).toFixed(2)}
+                                                </span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                            <Car size={13} className="shrink-0" />
-                                            <span>{co.vehicle_count} vehicle{co.vehicle_count !== 1 ? "s" : ""}</span>
-                                        </div>
-                                        <div>
-                                            <Badge variant="outline" className={cn("text-[0.7rem] font-semibold px-2.5 py-0.5", statusColors[status] ?? "")}>
-                                                {status}
-                                            </Badge>
-                                        </div>
-                                        <p className={cn("text-sm font-semibold tabular-nums", isNegative ? "text-red-500" : "text-foreground")}>
-                                            ${Number(co.total_monthly).toFixed(2)}
-                                        </p>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground">
-                                                    <MoreHorizontal size={15} />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-40">
-                                                <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSelectedCompany(co.id)}>View Vehicles</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openEditCompany(co)}>Edit Details</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => setConfirmDelete({ id: co.id, name: co.company_name, type: "company" })}>
-                                                    <Trash2 size={12} className="mr-1" /> Delete Customer
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
                                     </div>
                                 );
                             })
@@ -386,9 +469,9 @@ export default function CustomersView() {
 
                 {/* â”€â”€ Pagination footer â”€â”€ */}
                 {!loading && filtered.length > 0 && (
-                    <div className="flex items-center justify-between px-6 py-4 border-t border-border">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 sm:px-6 py-4 border-t border-border">
                         <p className="text-xs text-muted-foreground">
-                            Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)} to {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length.toLocaleString()} customers
+                            Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}-{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length.toLocaleString()}
                         </p>
                         <div className="flex items-center gap-1">
                             <button

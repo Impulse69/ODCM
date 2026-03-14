@@ -368,20 +368,20 @@ export default function VehiclesView() {
       </div>
 
       {/* ── Search + Add ── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="h-9" /> {/* spacer to match customer tab row height */}
-        <div className="flex items-center gap-3">
-          <div className="relative">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="hidden sm:block h-9" />
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-none">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search"
-              className="pl-9 pr-4 h-9 text-sm rounded-lg border border-border bg-background w-48 focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+              className="pl-9 pr-4 h-9 text-sm rounded-lg border border-border bg-background w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
             />
           </div>
-          <Button size="sm" className="gap-2 bg-odg-orange text-white hover:brightness-95 h-9" onClick={handleOpenForm}>
-            <Plus size={15} /> Register Vehicle
+          <Button size="sm" className="gap-2 bg-odg-orange text-white hover:brightness-95 h-9 shrink-0" onClick={handleOpenForm}>
+            <Plus size={15} /> <span className="hidden sm:inline">Register</span> Vehicle
           </Button>
         </div>
       </div>
@@ -431,7 +431,7 @@ export default function VehiclesView() {
       {/* ── Table ── */}
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
         {/* Column headers */}
-        <div className="grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_0.8fr_0.9fr_0.9fr_0.8fr_40px] gap-3 px-6 py-3 border-b border-border bg-muted/30">
+        <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_0.8fr_0.9fr_0.9fr_0.8fr_40px] gap-3 px-6 py-3 border-b border-border bg-muted/30">
           {["PLATE", "OWNER", "IMEI", "PLAN", "TRAKZEE", "INSTALLED", "EXPIRY / STATUS", "SMS STATUS", ""].map((col) => (
             <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
           ))}
@@ -445,82 +445,15 @@ export default function VehiclesView() {
           <p className="text-center text-sm text-muted-foreground py-12">No vehicles found.</p>
         ) : (
           <div className="divide-y divide-border">
-            {pageVehicles.map((v) => (
-              <div key={v.id} className="grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_0.8fr_0.9fr_0.9fr_0.8fr_40px] gap-3 items-center px-6 py-4 hover:bg-muted/30 transition-colors">
-                {/* Plate */}
-                <span className="font-bold text-sm text-foreground">{v.plate_number}</span>
-                {/* Owner */}
-                <div className="min-w-0">
-                  <p className="font-semibold text-sm text-foreground truncate">{v.customer_name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{v.phone}</p>
-                </div>
-                {/* IMEI */}
-                <span className="font-mono text-xs text-muted-foreground truncate">{v.imei}</span>
-                {/* Plan */}
-                <div>
-                  <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-orange-50 text-odg-orange border-orange-200">
-                    {v.plan}
-                  </Badge>
-                </div>
-                {/* Trakzee */}
-                <div>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-[0.7rem] font-semibold px-2.5 py-0.5 gap-1.5 flex items-center w-fit",
-                      v.trakzee_status === "Active"
-                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                        : "bg-red-50 text-red-600 border-red-200",
-                    )}
-                  >
-                    {v.trakzee_status === "Active" ? <Wifi size={10} /> : <WifiOff size={10} />}
-                    {v.trakzee_status}
-                  </Badge>
-                </div>
-                {/* Installation date */}
-                <span className="text-sm text-muted-foreground">
-                  {v.installation_date ? new Date(v.installation_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                </span>
-                {/* Expiry + Status badge */}
-                <div>
-                  <span className="text-sm text-muted-foreground block">
-                    {new Date(v.expiry_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                  </span>
-                  {(() => {
-                    const s = computeStatus(v.expiry_date, v.status);
-                    const cfg: Record<string, string> = {
-                      Active:    "bg-emerald-50 text-emerald-700 border-emerald-200",
-                      "Due Soon": "bg-amber-50 text-amber-700 border-amber-200",
-                      Expired:   "bg-red-50 text-red-700 border-red-200",
-                      Suspended: "bg-zinc-100 text-zinc-500 border-zinc-200",
-                    };
-                    return (
-                      <Badge variant="outline" className={cn("mt-1 text-[0.65rem] font-semibold px-2 py-0", cfg[s] ?? cfg.Active)}>
-                        {s}
-                      </Badge>
-                    );
-                  })()}
-                </div>
-                {/* SMS Status */}
-                <div className="space-y-0.5">
-                  {v.sms_status === 'Sent' ? (
-                    <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200 w-fit">
-                      ✓ Sent
-                    </Badge>
-                  ) : v.sms_status === 'Failed' ? (
-                    <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-red-50 text-red-700 border-red-200 w-fit">
-                      ✕ Failed
-                    </Badge>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                  {v.sms_sent_at && (
-                    <span className="text-[0.6rem] text-muted-foreground block">
-                      {new Date(v.sms_sent_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                    </span>
-                  )}
-                </div>
-                {/* Actions */}
+            {pageVehicles.map((v) => {
+              const vStatus = computeStatus(v.expiry_date, v.status);
+              const statusCfg: Record<string, string> = {
+                Active:    "bg-emerald-50 text-emerald-700 border-emerald-200",
+                "Due Soon": "bg-amber-50 text-amber-700 border-amber-200",
+                Expired:   "bg-red-50 text-red-700 border-red-200",
+                Suspended: "bg-zinc-100 text-zinc-500 border-zinc-200",
+              };
+              const actionsMenu = (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground">
@@ -529,19 +462,12 @@ export default function VehiclesView() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     {v.status !== "Suspended" && (
-                      <DropdownMenuItem
-                        className="text-xs cursor-pointer text-emerald-600 focus:text-emerald-600"
-                        onClick={() => handleOpenPay(v)}
-                      >
+                      <DropdownMenuItem className="text-xs cursor-pointer text-emerald-600 focus:text-emerald-600" onClick={() => handleOpenPay(v)}>
                         <CreditCard size={12} className="mr-1.5" />
                         {paidIds.has(v.id) ? "Payment Recorded ✓" : "Record Payment"}
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem
-                      className="text-xs cursor-pointer text-blue-600 focus:text-blue-600"
-                      disabled={smsSending === v.id}
-                      onClick={() => handleSendSms(v)}
-                    >
+                    <DropdownMenuItem className="text-xs cursor-pointer text-blue-600 focus:text-blue-600" disabled={smsSending === v.id} onClick={() => handleSendSms(v)}>
                       <MessageSquare size={12} className="mr-1.5" />
                       {smsSending === v.id ? "Sending SMS…" : "Send SMS Now"}
                     </DropdownMenuItem>
@@ -553,16 +479,88 @@ export default function VehiclesView() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              );
+              return (
+              <div key={v.id} className="hover:bg-muted/30 transition-colors">
+                {/* Desktop row */}
+                <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_0.8fr_0.9fr_0.9fr_0.8fr_40px] gap-3 items-center px-6 py-4">
+                  <span className="font-bold text-sm text-foreground">{v.plate_number}</span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm text-foreground truncate">{v.customer_name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{v.phone}</p>
+                  </div>
+                  <span className="font-mono text-xs text-muted-foreground truncate">{v.imei}</span>
+                  <div>
+                    <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-orange-50 text-odg-orange border-orange-200">
+                      {v.plan}
+                    </Badge>
+                  </div>
+                  <div>
+                    <Badge variant="outline" className={cn("text-[0.7rem] font-semibold px-2.5 py-0.5 gap-1.5 flex items-center w-fit", v.trakzee_status === "Active" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-red-50 text-red-600 border-red-200")}>
+                      {v.trakzee_status === "Active" ? <Wifi size={10} /> : <WifiOff size={10} />}
+                      {v.trakzee_status}
+                    </Badge>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {v.installation_date ? new Date(v.installation_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                  </span>
+                  <div>
+                    <span className="text-sm text-muted-foreground block">
+                      {new Date(v.expiry_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                    </span>
+                    <Badge variant="outline" className={cn("mt-1 text-[0.65rem] font-semibold px-2 py-0", statusCfg[vStatus] ?? statusCfg.Active)}>
+                      {vStatus}
+                    </Badge>
+                  </div>
+                  <div className="space-y-0.5">
+                    {v.sms_status === 'Sent' ? (
+                      <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200 w-fit">✓ Sent</Badge>
+                    ) : v.sms_status === 'Failed' ? (
+                      <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-red-50 text-red-700 border-red-200 w-fit">✕ Failed</Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                    {v.sms_sent_at && (
+                      <span className="text-[0.6rem] text-muted-foreground block">
+                        {new Date(v.sms_sent_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                      </span>
+                    )}
+                  </div>
+                  {actionsMenu}
+                </div>
+                {/* Mobile card */}
+                <div className="sm:hidden px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm text-foreground">{v.plate_number}</p>
+                      <p className="text-xs text-muted-foreground truncate">{v.customer_name} · {v.phone}</p>
+                    </div>
+                    {actionsMenu}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Badge variant="outline" className="text-[0.65rem] font-semibold px-2 py-0 bg-orange-50 text-odg-orange border-orange-200">{v.plan}</Badge>
+                    <Badge variant="outline" className={cn("text-[0.65rem] font-semibold px-2 py-0", statusCfg[vStatus] ?? statusCfg.Active)}>{vStatus}</Badge>
+                    <Badge variant="outline" className={cn("text-[0.65rem] font-semibold px-2 py-0 gap-1 flex items-center", v.trakzee_status === "Active" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-red-50 text-red-600 border-red-200")}>
+                      {v.trakzee_status === "Active" ? <Wifi size={8} /> : <WifiOff size={8} />}
+                      {v.trakzee_status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Exp: {new Date(v.expiry_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                    <span className="font-mono truncate max-w-[140px]">{v.imei}</span>
+                  </div>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         {/* ── Pagination footer ── */}
         {!loading && vehicles.length > 0 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-border">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 sm:px-6 py-4 border-t border-border">
             <p className="text-xs text-muted-foreground">
-              Showing {Math.min((page - 1) * PAGE_SIZE + 1, vehicles.length)} to {Math.min(page * PAGE_SIZE, vehicles.length)} of {vehicles.length.toLocaleString()} vehicles
+              Showing {Math.min((page - 1) * PAGE_SIZE + 1, vehicles.length)}-{Math.min(page * PAGE_SIZE, vehicles.length)} of {vehicles.length.toLocaleString()}
             </p>
             <div className="flex items-center gap-1">
               <button

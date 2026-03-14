@@ -78,6 +78,7 @@ export default function SettingsView() {
                     ...p,
                     firstReminderDays: cfg.firstReminderDays,
                     secondReminderDays: cfg.secondReminderDays,
+                    thirdReminderDays: cfg.thirdReminderDays || 3,
                 }));
                 setEmailConfig((p) => ({
                     ...p,
@@ -111,6 +112,7 @@ export default function SettingsView() {
         currency: "GH₵",
         firstReminderDays: 14,
         secondReminderDays: 7,
+        thirdReminderDays: 3,
     });
     const [systemSaved, setSystemSaved] = useState(false);
 
@@ -162,10 +164,11 @@ export default function SettingsView() {
             await saveSmsConfig({
                 firstReminderDays: systemSettings.firstReminderDays,
                 secondReminderDays: systemSettings.secondReminderDays,
+                thirdReminderDays: systemSettings.thirdReminderDays,
             });
             setSystemSaved(true);
             setTimeout(() => setSystemSaved(false), 2500);
-            toast.success("General settings saved", `Reminders set to ${systemSettings.firstReminderDays} days and ${systemSettings.secondReminderDays} days before expiry.`);
+            toast.success("General settings saved", `Reminders set to ${systemSettings.firstReminderDays}, ${systemSettings.secondReminderDays}, and ${systemSettings.thirdReminderDays} days before expiry.`);
         } catch (err) {
             toast.error("Failed to save settings", err instanceof Error ? err.message : "Please try again.");
         }
@@ -622,8 +625,9 @@ export default function SettingsView() {
                                         <p className="text-xs font-semibold text-foreground">Due Soon SMS</p>
                                         <p className="text-[0.7rem] text-muted-foreground mt-0.5">
                                             Send SMS when a vehicle subscription is approaching expiry (triggers at{" "}
-                                            <strong>{systemSettings.firstReminderDays} days</strong> and{" "}
-                                            <strong>{systemSettings.secondReminderDays} days</strong> before expiry)
+                                            <strong>{systemSettings.firstReminderDays} days</strong>,{" "}
+                                            <strong>{systemSettings.secondReminderDays} days</strong>, and{" "}
+                                            <strong>{systemSettings.thirdReminderDays} days</strong> before expiry)
                                         </p>
                                     </div>
                                     <ToggleSwitch
@@ -738,6 +742,11 @@ export default function SettingsView() {
                                 },
                                 {
                                     trigger: `${systemSettings.secondReminderDays} days before expiry`,
+                                    action: "Due Soon SMS — 2nd reminder",
+                                    enabled: smsNotifs.dueSoon,
+                                },
+                                {
+                                    trigger: `${systemSettings.thirdReminderDays} days before expiry`,
                                     action: "Due Soon SMS — final reminder",
                                     enabled: smsNotifs.dueSoon,
                                 },
@@ -817,7 +826,7 @@ export default function SettingsView() {
                                     Set how many days before expiry the system sends &ldquo;Due Soon&rdquo; reminders. When a
                                     subscription reaches day 0 the &ldquo;Expired&rdquo; SMS is triggered automatically.
                                 </p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div className="space-y-1.5">
                                         <Label className="text-xs font-semibold">
                                             First Reminder (days before expiry)
@@ -855,7 +864,27 @@ export default function SettingsView() {
                                             className="h-9 text-sm"
                                         />
                                         <p className="text-[0.68rem] text-muted-foreground">
-                                            e.g. 7 → Final reminder SMS sent 1 week before expiry
+                                            e.g. 7 → 2nd reminder SMS sent 1 week before
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold">
+                                            Third Reminder (days before expiry)
+                                        </Label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            value={systemSettings.thirdReminderDays}
+                                            onChange={(e) =>
+                                                setSystemSettings((p) => ({
+                                                    ...p,
+                                                    thirdReminderDays: parseInt(e.target.value) || 3,
+                                                }))
+                                            }
+                                            className="h-9 text-sm"
+                                        />
+                                        <p className="text-[0.68rem] text-muted-foreground">
+                                            e.g. 3 → Final reminder SMS 3 days before expiry
                                         </p>
                                     </div>
                                 </div>
@@ -875,10 +904,16 @@ export default function SettingsView() {
                                                 color: "text-amber-700",
                                             },
                                             {
-                                                dot: "bg-orange-500",
+                                                dot: "bg-orange-400",
                                                 label: `−${systemSettings.secondReminderDays}d`,
                                                 sub: "2nd SMS",
                                                 color: "text-orange-700",
+                                            },
+                                            {
+                                                dot: "bg-orange-600",
+                                                label: `−${systemSettings.thirdReminderDays}d`,
+                                                sub: "3rd SMS",
+                                                color: "text-orange-800",
                                             },
                                             {
                                                 dot: "bg-destructive",

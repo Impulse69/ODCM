@@ -180,8 +180,8 @@ export default function SubscriptionTable() {
     return (
         <Card className="border border-border shadow-sm overflow-hidden">
             {/* ── Header ── */}
-            <CardHeader className="border-b border-border pb-0 pt-5 px-5">
-                <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+            <CardHeader className="border-b border-border pb-0 pt-5 px-4 sm:px-5">
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 mb-4">
                     <div>
                         <CardTitle className="text-base font-bold">Due Subscriptions</CardTitle>
                         <CardDescription className="text-xs mt-0.5">
@@ -216,9 +216,9 @@ export default function SubscriptionTable() {
                 </div>
 
                 {/* Tabs + search row */}
-                <div className="flex items-center justify-between gap-3 flex-wrap pb-1">
-                    <Tabs value={filterTab} onValueChange={(v) => setFilterTab(v as FilterTab)}>
-                        <TabsList className="h-8 bg-muted/60 p-0.5 gap-0.5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-1">
+                    <Tabs value={filterTab} onValueChange={(v) => setFilterTab(v as FilterTab)} className="w-full sm:w-auto">
+                        <TabsList className="h-8 bg-muted/60 p-0.5 gap-0.5 w-full sm:w-auto overflow-x-auto">
                             {FILTER_TABS.map((tab) => (
                                 <TabsTrigger
                                     key={tab}
@@ -249,7 +249,7 @@ export default function SubscriptionTable() {
             {/* ── Table ── */}
             <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                    <Table>
+                    <Table className="min-w-[800px]">
                         <TableHeader>
                             <TableRow className="bg-muted/30 hover:bg-muted/30">
                                 <ThCell field="customer_name" sortable {...thProps}>Customer Info</ThCell>
