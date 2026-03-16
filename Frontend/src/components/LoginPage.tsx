@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Activity, Eye, EyeOff, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
+import { useToast } from "@/lib/toast";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -12,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, isAuthenticated, isLoading } = useAuth();
+  const { success: toastSuccess, error: toastError } = useToast();
   const router = useRouter();
 
   // Redirect to dashboard if already authenticated
@@ -28,9 +31,12 @@ export default function LoginPage() {
 
     const result = await login(email, password);
     if (result.success) {
+      toastSuccess("Login Successful", "Welcome to the ODCMS dashboard.");
       router.push("/");
     } else {
-      setError(result.error || "Login failed");
+      const msg = result.error || "Login failed";
+      setError(msg);
+      toastError("Login Failed", msg);
     }
     setIsSubmitting(false);
   };
@@ -61,12 +67,12 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-linear-to-br from-odg-orange to-odg-orange-dark flex items-center justify-center shadow-lg shadow-orange-900/40">
-              <Activity size={22} className="text-white" />
+            <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-lg overflow-hidden p-1">
+              <img src="/favicon.png" alt="ODCMS Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <div className="font-extrabold text-lg text-white leading-tight tracking-tight">ODCMS</div>
-              <div className="text-[0.6rem] text-white/40 font-medium tracking-widest uppercase">
+              <div className="font-extrabold text-xl text-white leading-tight tracking-tight">ODCMS</div>
+              <div className="text-[0.65rem] text-white/40 font-medium tracking-widest uppercase">
                 ODG Master Authority
               </div>
             </div>
@@ -110,11 +116,11 @@ export default function LoginPage() {
           <div className="w-full max-w-100 space-y-8">
           {/* Mobile logo (shown below lg) */}
           <div className="lg:hidden flex items-center gap-3 justify-center mb-4">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-odg-orange to-odg-orange-dark flex items-center justify-center shadow-lg shadow-orange-900/30">
-              <Activity size={20} className="text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-md overflow-hidden p-1">
+              <img src="/favicon.png" alt="ODCMS Logo" className="w-full h-full object-contain" />
             </div>
             <div>
-              <div className="font-extrabold text-base text-foreground leading-tight">ODCMS</div>
+              <div className="font-extrabold text-lg text-foreground leading-tight">ODCMS</div>
               <div className="text-[0.55rem] text-muted-foreground font-medium tracking-widest uppercase">
                 ODG Master Authority
               </div>

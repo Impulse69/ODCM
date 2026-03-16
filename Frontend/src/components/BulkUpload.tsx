@@ -12,7 +12,10 @@ import {
   Info,
   Download,
   Loader2,
+  UserCheck,
+  UserPlus,
 } from "lucide-react";
+import { validateBulkImport, executeBulkImport, BulkValidationResult } from "@/lib/bulk-import-api";
 import {
   Card,
   CardContent,
@@ -33,7 +36,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+// const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
 // -- Expected CSV columns:
 // customerName, phone, customerType (individual/company), plateNumber, imei, plan, installationDate (opt), expiryDate
@@ -58,7 +61,7 @@ interface ImportResult {
   skipped: number;
   errors: number;
   errorDetails: { row: number; message: string }[];
-  skippedDetails: { row: number; imei: string; reason: string }[];
+  skippedDetails: { row: number; imei: string; plateNumber: string; reason: string }[];
 }
 
 const REQUIRED_COLUMNS = ["customerName", "phone", "plateNumber", "imei", "plan", "expiryDate"];
@@ -383,6 +386,8 @@ export default function BulkUpload() {
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [importing, setImporting]     = useState(false);
   const [result, setResult]           = useState<ImportResult | null>(null);
+  const [validation, setValidation]   = useState<BulkValidationResult | null>(null);
+  const [validating, setValidating]   = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = useCallback(() => {
@@ -429,8 +434,14 @@ export default function BulkUpload() {
           if (!r.imei)         rowErrors.push("imei is blank");
           if (!r.plan)         rowErrors.push("plan is blank");
           if (!r.expiryDate)   rowErrors.push("expiryDate is blank");
-          if (r.plan && !["Basic", "Standard", "Premium"].includes(r.plan))
+          const planValue = r.plan || "";
+          const normalizedPlan = planValue.charAt(0).toUpperCase() + planValue.slice(1).toLowerCase();
+          if (planValue && !["Basic", "Standard", "Premium"].includes(normalizedPlan))
             rowErrors.push(`plan must be Basic, Standard, or Premium (got "${r.plan}")`);
+          const isSci = (s: string) => /^[0-9.]+[eE]\+[0-9]+$/.test(String(s));
+          if (isSci(r.imei))  rowErrors.push("IMEI looks like scientific notation (e.g. 1.23E+14). In Excel, format the IMEI column as 'Text' before saving.");
+          if (isSci(r.phone)) rowErrors.push("Phone looks like scientific notation. In Excel, format the Phone column as 'Text' before saving.");
+
           return {
             customerName:     r.customerName ?? "",
             phone:            r.phone ?? "",
@@ -439,13 +450,26 @@ export default function BulkUpload() {
             imei:             r.imei ?? "",
             plan:             r.plan ?? "",
             installationDate: r.installationDate ?? "",
-            expiryDate:       r.expiryDate ?? "",
+            expiry_date:      r.expiry_date ?? r.expiryDate ?? "",
+            expiryDate:       r.expiryDate ?? r.expiry_date ?? "",
             _rowNum: rowNum,
             _error: rowErrors.length ? rowErrors.join("; ") : undefined,
           };
         });
 
-        setParsedRows(bulkRows); setParseErrors(errs); setParsed(true); setParsing(false);
+        setParsedRows(bulkRows);
+        setParseErrors(errs);
+        setParsed(true);
+        setParsing(false);
+
+        // Pre-validate with backend
+        if (bulkRows.length > 0 && errs.length === 0) {
+          setValidating(true);
+          validateBulkImport(bulkRows)
+            .then(res => setValidation(res))
+            .catch(err => console.error("Validation failed:", err))
+            .finally(() => setValidating(false));
+        }
       }, 700);
     };
     reader.readAsText(file);
@@ -457,16 +481,10 @@ export default function BulkUpload() {
     if (!validRows.length) return;
     setImporting(true);
     try {
-      const res = await fetch(`${BASE}/api/bulk-import`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rows: validRows.map(({ _rowNum, _error, ...rest }) => { void _rowNum; void _error; return rest; }),
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message ?? "Import failed");
-      setResult(json);
+      const json = await executeBulkImport(
+        validRows.map(({ _rowNum, _error, ...rest }) => ({ ...rest }))
+      );
+      setResult(json as any);
     } catch (err) {
       setResult({
         imported: 0, importedIndividuals: 0, importedCompanies: 0,
@@ -518,6 +536,7 @@ export default function BulkUpload() {
                 <p>
                   <strong>Required columns: </strong>
                   <code className="font-mono">customerName, phone, plateNumber, imei, plan, expiryDate</code>
+                  <span className="ml-2 bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[0.6rem] font-bold uppercase">Matching by Phone</span>
                 </p>
                 <p>
                   <strong>Optional columns: </strong>
@@ -615,9 +634,11 @@ export default function BulkUpload() {
                     )}
                     {result.skipped > 0 && (
                       <>
-                        <p>{result.skipped} skipped (duplicate IMEI):</p>
+                        <p>{result.skipped} skipped (duplicates):</p>
                         {result.skippedDetails.map((s, i) => (
-                          <p key={i} className="text-[0.7rem]">Row {s.row} � IMEI {s.imei}: {s.reason}</p>
+                          <p key={i} className="text-[0.7rem]">
+                            Row {s.row} — {s.reason} (Plate: {s.plateNumber}, IMEI: {s.imei})
+                          </p>
                         ))}
                       </>
                     )}
@@ -649,7 +670,7 @@ export default function BulkUpload() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/40 hover:bg-muted/40">
-                        {["#", "Customer", "Phone", "Type", "Plate", "IMEI", "Plan", "Expiry", "Installed", ""].map((h) => (
+                        {["#", "Status", "Customer", "Phone", "Type", "Plate", "IMEI", "Plan", "Expiry", "Installed", ""].map((h) => (
                           <TableHead key={h} className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">
                             {h}
                           </TableHead>
@@ -660,8 +681,54 @@ export default function BulkUpload() {
                       {parsedRows.map((row, idx) => (
                         <TableRow key={idx} className={cn("text-sm hover:bg-muted/30", row._error && "bg-red-50/60")}>
                           <TableCell className="text-muted-foreground font-medium">{row._rowNum}</TableCell>
+                          <TableCell>
+                            {validating ? (
+                              <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                            ) : (
+                              validation?.rows?.find(vr => vr.rowNum === row._rowNum) ? (
+                                (() => {
+                                  const v = validation.rows.find(vr => vr.rowNum === row._rowNum);
+                                  if (v?.vehicleStatus === 'Invalid Format') return (
+                                    <div className="flex flex-col gap-1">
+                                      <Badge variant="destructive" className="text-[0.6rem] whitespace-nowrap">Format Error</Badge>
+                                      <span className="text-[0.6rem] text-red-600 font-bold leading-none animate-pulse">{v.duplicateReason}</span>
+                                    </div>
+                                  );
+                                  if (v?.vehicleStatus === 'Duplicate') return (
+                                    <div className="flex flex-col gap-1">
+                                      <Badge variant="destructive" className="text-[0.6rem] whitespace-nowrap">Duplicate</Badge>
+                                      <span className="text-[0.6rem] text-red-600 font-medium leading-none">{v.duplicateReason}</span>
+                                    </div>
+                                  );
+                                  if (v?.vehicleStatus === 'Invalid Plan') return (
+                                    <div className="flex flex-col gap-1">
+                                      <Badge variant="destructive" className="text-[0.6rem] whitespace-nowrap">Plan Error</Badge>
+                                      <span className="text-[0.6rem] text-red-600 font-medium">{v.duplicateReason}</span>
+                                    </div>
+                                  );
+                                  if (v?.customerStatus === 'New') return (
+                                    <Badge variant="outline" className="text-[0.6rem] bg-emerald-50 text-emerald-700 border-emerald-200">New User</Badge>
+                                  );
+                                  if (v?.customerStatus === 'Existing' || v?.customerStatus === 'Existing (Batch)') return (
+                                    <Badge variant="secondary" className="text-[0.6rem] bg-blue-50 text-blue-700 border-blue-200">Existing</Badge>
+                                  );
+                                  if (v?.customerStatus === 'Cross-Type') return (
+                                    <Badge variant="secondary" className="text-[0.6rem] bg-amber-50 text-amber-700 border-amber-200">Cross-Type</Badge>
+                                  );
+                                  return <div className="w-4 h-4 rounded-full border border-emerald-300" />;
+                                })()
+                              ) : <div className="w-1" />
+                            )}
+                          </TableCell>
                           <TableCell className="font-semibold whitespace-nowrap">{row.customerName}</TableCell>
-                          <TableCell className="text-muted-foreground whitespace-nowrap">{row.phone}</TableCell>
+                          <TableCell className="text-muted-foreground whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <span>{row.phone}</span>
+                              {row._error && row._error.includes("scientific notation") && (
+                                <span className="text-[0.6rem] text-red-500 font-bold underline">FORMAT AS TEXT IN EXCEL</span>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={cn("text-[0.65rem] px-2 py-0.5", row.customerType === "company" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-zinc-50 text-zinc-600 border-zinc-200")}>
                               {row.customerType || "individual"}

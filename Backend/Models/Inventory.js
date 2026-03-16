@@ -12,12 +12,21 @@ async function createInventoryTables() {
 	`);
 
 	await pool.query(`
+		CREATE TABLE IF NOT EXISTS inventory_types (
+			id            SERIAL PRIMARY KEY,
+			category_name TEXT NOT NULL,
+			name          TEXT NOT NULL UNIQUE,
+			created_at    TIMESTAMP DEFAULT NOW()
+		)
+	`);
+
+	await pool.query(`
 		CREATE TABLE IF NOT EXISTS inventory (
 			id           SERIAL PRIMARY KEY,
 			category     TEXT NOT NULL,
 			imei_number  TEXT NOT NULL UNIQUE,
 			type         TEXT NOT NULL,
-			quantity     INTEGER NOT NULL DEFAULT 0,
+			quantity     INTEGER NOT NULL DEFAULT 1,
 			created_at   TIMESTAMP DEFAULT NOW(),
 			updated_at   TIMESTAMP DEFAULT NOW()
 		)
@@ -36,11 +45,6 @@ async function createInventoryTables() {
 		)
 	`);
 
-	// Seed default categories if empty
-	const { rows } = await pool.query('SELECT COUNT(*) FROM inventory_categories');
-	if (parseInt(rows[0].count) === 0) {
-		await pool.query(`INSERT INTO inventory_categories (name) VALUES ('Tracker'), ('Camera') ON CONFLICT DO NOTHING`);
-	}
 }
 
 // ─── Categories ────────────────────────────────────────────────────────────────
@@ -60,6 +64,25 @@ async function createCategory(name) {
 
 async function deleteCategory(id) {
 	await pool.query('DELETE FROM inventory_categories WHERE id = $1', [id]);
+}
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+async function getAllTypes() {
+	const { rows } = await pool.query('SELECT * FROM inventory_types ORDER BY name ASC');
+	return rows;
+}
+
+async function createType(category_name, name) {
+	const { rows } = await pool.query(
+		'INSERT INTO inventory_types (category_name, name) VALUES ($1, $2) RETURNING *',
+		[category_name, name]
+	);
+	return rows[0];
+}
+
+async function deleteType(id) {
+	await pool.query('DELETE FROM inventory_types WHERE id = $1', [id]);
 }
 
 // ─── Inventory Items ───────────────────────────────────────────────────────────
@@ -165,6 +188,9 @@ module.exports = {
 	getAllCategories,
 	createCategory,
 	deleteCategory,
+	getAllTypes,
+	createType,
+	deleteType,
 	getAllItems,
 	getItemById,
 	createItem,

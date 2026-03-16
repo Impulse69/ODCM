@@ -9,6 +9,9 @@ const {
 	deleteItem,
 	useItem,
 	getUsageHistory,
+	getAllTypes,
+	createType,
+	deleteType,
 } = require('../Models/Inventory');
 
 // ─── Categories ────────────────────────────────────────────────────────────────
@@ -38,6 +41,38 @@ async function removeCategory(req, res) {
 	try {
 		await deleteCategory(req.params.id);
 		res.json({ success: true, message: 'Category deleted.' });
+	} catch (err) {
+		res.status(500).json({ success: false, message: err.message });
+	}
+}
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+async function getTypes(req, res) {
+	try {
+		const data = await getAllTypes();
+		res.json({ success: true, data });
+	} catch (err) {
+		res.status(500).json({ success: false, message: err.message });
+	}
+}
+
+async function addType(req, res) {
+	try {
+		const { category_name, name } = req.body;
+		if (!category_name || !name) return res.status(400).json({ success: false, message: 'Category name and type name are required.' });
+		const type = await createType(category_name, name);
+		res.status(201).json({ success: true, data: type });
+	} catch (err) {
+		if (err.code === '23505') return res.status(409).json({ success: false, message: 'Type already exists.' });
+		res.status(500).json({ success: false, message: err.message });
+	}
+}
+
+async function removeType(req, res) {
+	try {
+		await deleteType(req.params.id);
+		res.json({ success: true, message: 'Type deleted.' });
 	} catch (err) {
 		res.status(500).json({ success: false, message: err.message });
 	}
@@ -132,4 +167,5 @@ module.exports = {
 	getCategories, addCategory, removeCategory,
 	getInventory, getInventoryItem, addInventoryItem, editInventoryItem, removeInventoryItem,
 	recordUsage, viewUsageHistory,
+	getTypes, addType, removeType,
 };

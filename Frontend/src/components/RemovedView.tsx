@@ -200,7 +200,7 @@ export default function RemovedView() {
 
             {/* ── Table ── */}
             <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                <div className="grid grid-cols-[1.5fr_1fr_0.7fr_0.8fr_0.7fr_120px] gap-4 px-6 py-3 border-b border-border bg-muted/30">
+                <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.7fr_0.8fr_0.7fr_120px] gap-4 px-6 py-3 border-b border-border bg-muted/30">
                     {["CUSTOMER", "VEHICLE", "PLAN", "EXPIRY", "SMS STATUS", "ACTION"].map((col) => (
                         <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
                     ))}
@@ -224,63 +224,110 @@ export default function RemovedView() {
                             const isExpired = expiry < today;
                             const expiryLabel = expiry.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
                             return (
-                                <div
-                                    key={s.id}
-                                    className="grid grid-cols-[1.5fr_1fr_0.7fr_0.8fr_0.7fr_120px] gap-4 items-center px-6 py-4 hover:bg-muted/30 transition-colors"
-                                >
-                                    {/* Customer */}
-                                    <div className="min-w-0">
-                                        <p className="font-semibold text-sm text-foreground truncate">{s.customer_name}</p>
-                                        <p className="text-xs text-muted-foreground mt-0.5">{s.phone}</p>
+                                <div key={s.id} className="hover:bg-muted/30 transition-colors">
+                                    <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.7fr_0.8fr_0.7fr_120px] gap-4 items-center px-6 py-4">
+                                        {/* Customer */}
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-sm text-foreground truncate">{s.customer_name}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">{s.phone}</p>
+                                        </div>
+
+                                        {/* Vehicle */}
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-1.5">
+                                                <Car size={12} className="text-muted-foreground shrink-0" />
+                                                <span className="font-semibold text-sm text-foreground">{s.plate_number}</span>
+                                            </div>
+                                            <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5 truncate">{s.imei}</p>
+                                        </div>
+
+                                        {/* Plan */}
+                                        <div>
+                                            <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-orange-50 text-odg-orange border-orange-200">
+                                                {s.plan}
+                                            </Badge>
+                                        </div>
+
+                                        {/* Expiry */}
+                                        <span className={cn("text-sm whitespace-nowrap", isExpired ? "text-red-500 font-semibold" : "text-muted-foreground")}>
+                                            {expiryLabel}
+                                        </span>
+
+                                        {/* SMS Status */}
+                                        <div>
+                                            {s.sms_status === 'Sent' ? (
+                                                <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200">
+                                                    ✓ Sent
+                                                </Badge>
+                                            ) : s.sms_status === 'Failed' ? (
+                                                <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-red-50 text-red-700 border-red-200">
+                                                    ✕ Failed
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-zinc-100 text-zinc-500 border-zinc-200">
+                                                    — No SMS
+                                                </Badge>
+                                            )}
+                                        </div>
+
+                                        {/* Action */}
+                                        <div>
+                                            <Button
+                                                size="xs"
+                                                onClick={() => openPayDialog(s)}
+                                                className="h-7 px-2.5 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                                            >
+                                                <CreditCard size={11} /> Pay & Restore
+                                            </Button>
+                                        </div>
                                     </div>
 
-                                    {/* Vehicle */}
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-1.5">
+                                    <div className="sm:hidden px-4 py-4 space-y-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-sm text-foreground truncate">{s.customer_name}</p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">{s.phone}</p>
+                                            </div>
+                                            <Badge variant="outline" className="text-[0.65rem] font-semibold px-2 py-0.5 bg-orange-50 text-odg-orange border-orange-200 shrink-0">
+                                                {s.plan}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 min-w-0">
                                             <Car size={12} className="text-muted-foreground shrink-0" />
                                             <span className="font-semibold text-sm text-foreground">{s.plate_number}</span>
                                         </div>
-                                        <p className="font-mono text-[0.65rem] text-muted-foreground mt-0.5 truncate">{s.imei}</p>
-                                    </div>
+                                        <p className="font-mono text-[0.65rem] text-muted-foreground truncate">{s.imei}</p>
 
-                                    {/* Plan */}
-                                    <div>
-                                        <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-orange-50 text-odg-orange border-orange-200">
-                                            {s.plan}
-                                        </Badge>
-                                    </div>
+                                        <div className="flex items-center justify-between gap-3 text-xs">
+                                            <span className="text-muted-foreground uppercase tracking-wide">Expiry</span>
+                                            <span className={cn("font-semibold whitespace-nowrap", isExpired ? "text-red-500" : "text-foreground")}>{expiryLabel}</span>
+                                        </div>
 
-                                    {/* Expiry */}
-                                    <span className={cn("text-sm", isExpired ? "text-red-500 font-semibold" : "text-muted-foreground")}>
-                                        {expiryLabel}
-                                    </span>
-
-                                    {/* SMS Status */}
-                                    <div>
-                                        {s.sms_status === 'Sent' ? (
-                                            <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200">
-                                                ✓ Sent
-                                            </Badge>
-                                        ) : s.sms_status === 'Failed' ? (
-                                            <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-red-50 text-red-700 border-red-200">
-                                                ✕ Failed
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-zinc-100 text-zinc-500 border-zinc-200">
-                                                — No SMS
-                                            </Badge>
-                                        )}
-                                    </div>
-
-                                    {/* Action */}
-                                    <div>
-                                        <Button
-                                            size="xs"
-                                            onClick={() => openPayDialog(s)}
-                                            className="h-7 px-2.5 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
-                                        >
-                                            <CreditCard size={11} /> Pay & Restore
-                                        </Button>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                {s.sms_status === 'Sent' ? (
+                                                    <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200">
+                                                        ✓ Sent
+                                                    </Badge>
+                                                ) : s.sms_status === 'Failed' ? (
+                                                    <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-red-50 text-red-700 border-red-200">
+                                                        ✕ Failed
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-zinc-100 text-zinc-500 border-zinc-200">
+                                                        — No SMS
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <Button
+                                                size="xs"
+                                                onClick={() => openPayDialog(s)}
+                                                className="h-8 px-3 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                                            >
+                                                <CreditCard size={11} /> Pay & Restore
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             );

@@ -34,6 +34,13 @@ export interface InventoryCategory {
   created_at: string;
 }
 
+export interface InventoryType {
+  id: number;
+  category_name: string;
+  name: string;
+  created_at: string;
+}
+
 export interface InventoryItem {
   id: number;
   category: string;
@@ -81,6 +88,20 @@ export const addInventoryCategory = (name: string) =>
 
 export const removeInventoryCategory = (id: number) =>
   request<void>(`/api/inventory/categories/${id}`, { method: 'DELETE' });
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export const getInventoryTypes = () =>
+  request<InventoryType[]>('/api/inventory/types');
+
+export const addInventoryType = (category_name: string, name: string) =>
+  request<InventoryType>('/api/inventory/types', {
+    method: 'POST',
+    body: JSON.stringify({ category_name, name }),
+  });
+
+export const removeInventoryType = (id: number) =>
+  request<void>(`/api/inventory/types/${id}`, { method: 'DELETE' });
 
 // ─── Inventory Items ──────────────────────────────────────────────────────────
 

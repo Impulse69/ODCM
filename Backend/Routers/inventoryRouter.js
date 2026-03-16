@@ -4,6 +4,9 @@ const {
 	getCategories,
 	addCategory,
 	removeCategory,
+	getTypes,
+	addType,
+	removeType,
 	getInventory,
 	addInventoryItem,
 	editInventoryItem,
@@ -16,6 +19,11 @@ const {
 router.get   ('/categories',     getCategories);
 router.post  ('/categories',     addCategory);
 router.delete('/categories/:id', removeCategory);
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+router.get   ('/types',          getTypes);
+router.post  ('/types',          addType);
+router.delete('/types/:id',       removeType);
 
 // ─── Usage History ─────────────────────────────────────────────────────────────
 router.get   ('/usage-history',  viewUsageHistory);

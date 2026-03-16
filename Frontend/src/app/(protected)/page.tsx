@@ -71,7 +71,7 @@ export default function DashboardPage() {
         />
 
         {/* Page content — pushed below fixed header */}
-        <main className="flex-1 pt-16 p-3 sm:p-6 space-y-6">
+        <main className="flex-1 px-3 pb-3 pt-20 sm:px-6 sm:pb-6 sm:pt-20 space-y-6">
           {/* ── Dashboard ──────────────────────────────────────────────────── */}
           {activeSection === "dashboard" && (
             <div className="space-y-6">

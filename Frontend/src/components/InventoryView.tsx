@@ -14,6 +14,8 @@ import {
   Package,
   Camera,
   MapPin,
+  Settings2,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +43,10 @@ import {
 import {
   getInventoryCategories,
   addInventoryCategory,
+  removeInventoryCategory,
+  getInventoryTypes,
+  addInventoryType,
+  removeInventoryType,
   getInventoryItems,
   addInventoryItem,
   editInventoryItem,
@@ -50,6 +56,7 @@ import {
   type InventoryItem,
   type InventoryCategory,
   type InventoryUsage,
+  type InventoryType,
 } from "@/lib/inventory-api";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +92,7 @@ export default function InventoryView() {
 
   // Data
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [types, setTypes] = useState<InventoryType[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [usageHistory, setUsageHistory] = useState<InventoryUsage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +119,10 @@ export default function InventoryView() {
   const [newCatName, setNewCatName] = useState("");
   const [creatingCat, setCreatingCat] = useState(false);
 
+  const [showManagement, setShowManagement] = useState(false);
+  const [newTypeName, setNewTypeName] = useState("");
+  const [typeCatSelect, setTypeCatSelect] = useState("");
+
   // IMEI Dropdown state
   const [imeiOpen, setImeiOpen] = useState(false);
   const [imeiSearch, setImeiSearch] = useState("");
@@ -124,12 +136,14 @@ export default function InventoryView() {
     setLoading(true);
     setError(null);
     try {
-      const [cats, inv, usage] = await Promise.all([
+      const [cats, typs, inv, usage] = await Promise.all([
         getInventoryCategories(),
+        getInventoryTypes(),
         getInventoryItems(),
         getInventoryUsageHistory(),
       ]);
       setCategories(cats);
+      setTypes(typs);
       setItems(inv);
       setUsageHistory(usage);
     } catch (err) {
@@ -168,22 +182,20 @@ export default function InventoryView() {
     );
   }, [usageHistory, usageSearch]);
 
-  const trackersCount = items.filter(i => i.category.toLowerCase() === "tracker").reduce((sum, i) => sum + i.quantity, 0);
-  const camerasCount = items.filter(i => i.category.toLowerCase() === "camera").reduce((sum, i) => sum + i.quantity, 0);
+  // Removed unused trackersCount and camerasCount
 
   // ─── Save Item ───────────────────────────────────────────────────────────────
 
   const handleSaveItem = async () => {
-    if (!itemForm.category || !itemForm.imei_number || !itemForm.type || !itemForm.quantity) {
+    if (!itemForm.category || !itemForm.imei_number || !itemForm.type) {
       setError("Please fill all item fields");
       return;
     }
-    const qty = parseInt(itemForm.quantity);
-    if (isNaN(qty) || qty < 0) {
-      setError("Quantity must be a valid number >= 0");
+    // IMEI must be unique
+    if (items.some(i => i.imei_number === itemForm.imei_number && i.id !== itemForm.id)) {
+      setError("IMEI number must be unique for each item.");
       return;
     }
-
     setSavingItem(true);
     setError(null);
     try {
@@ -192,14 +204,14 @@ export default function InventoryView() {
           category: itemForm.category,
           imei_number: itemForm.imei_number,
           type: itemForm.type,
-          quantity: qty,
+          quantity: 1,
         });
       } else {
         await addInventoryItem({
           category: itemForm.category,
           imei_number: itemForm.imei_number,
           type: itemForm.type,
-          quantity: qty,
+          quantity: 1,
         });
       }
       setShowItemForm(false);
@@ -211,22 +223,53 @@ export default function InventoryView() {
     }
   };
 
-  // ─── Add Category inline ──────────────────────────────────────────────────────
+  // ─── Management ──────────────────────────────────────────────────────────────
 
-  const handleAddCategory = async (e: React.FormEvent) => {
+  const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
     setCreatingCat(true);
     try {
       const cat = await addInventoryCategory(newCatName.trim());
-      setCategories((prev) => [...prev, cat]);
-      setItemForm({ ...itemForm, category: cat.name });
+      setCategories([...categories, cat]);
       setNewCatName("");
-      setCatOpen(false);
     } catch (err) {
-      // ignore dupes or show small error
+      console.error(err);
     } finally {
       setCreatingCat(false);
+    }
+  };
+
+  const handleRemoveCategory = async (id: number) => {
+    try {
+      await removeInventoryCategory(id);
+      setCategories(categories.filter(c => c.id !== id));
+      // Also clean up any types for this category
+      const cat = categories.find(c => c.id === id);
+      if (cat) setTypes(types.filter(t => t.category_name !== cat.name));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateType = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTypeName.trim() || !typeCatSelect) return;
+    try {
+      const type = await addInventoryType(typeCatSelect, newTypeName.trim());
+      setTypes([...types, type]);
+      setNewTypeName("");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRemoveType = async (id: number) => {
+    try {
+      await removeInventoryType(id);
+      setTypes(types.filter(t => t.id !== id));
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -356,7 +399,6 @@ export default function InventoryView() {
             })}
           </div>
         )}
-        {/* Pagination omitted for brevity, same pattern as VehiclesView */}
         {!loading && filteredStock.length > 0 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-border">
             <p className="text-xs text-muted-foreground">
@@ -437,11 +479,13 @@ export default function InventoryView() {
   };
 
   return (
-    <div className="space-y-5 pt-6">
-      {/* ── Header ── */}
+    <div className="space-y-5">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Inventory Management</h1>
         <div className="flex gap-2">
+           <Button variant="outline" size="sm" onClick={() => setShowManagement(true)}>
+            <Settings2 size={15} className="mr-2" /> Manage
+          </Button>
           {activeTab === "stock" ? (
              <Button size="sm" className="bg-odg-orange text-white hover:brightness-95" onClick={() => { setItemForm(emptyItemForm); setShowItemForm(true); }}>
               <Plus size={15} className="mr-2" /> Add Item
@@ -456,28 +500,53 @@ export default function InventoryView() {
 
       {/* ── KPIs (Only on stock tab) ── */}
       {activeTab === "stock" && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-card border border-border rounded-xl px-5 py-4 shadow-sm flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0"><Package size={20} /></div>
+        <div className="flex flex-wrap gap-3">
+          {/* Total Stock Card */}
+          <div className="bg-card border border-border rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 min-w-40">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Package size={16} />
+            </div>
             <div>
-              <p className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Total Items in Stock</p>
-              <p className="text-2xl font-extrabold text-foreground mt-0.5">{items.reduce((sum, i) => sum + i.quantity, 0)}</p>
+              <p className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">Total Stock</p>
+              <p className="text-lg font-extrabold text-foreground leading-tight">
+                {items.reduce((sum, i) => sum + i.quantity, 0)}
+              </p>
             </div>
           </div>
-          <div className="bg-card border border-border rounded-xl px-5 py-4 shadow-sm flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 shrink-0"><MapPin size={20} /></div>
-            <div>
-              <p className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Trackers Available</p>
-              <p className="text-2xl font-extrabold text-foreground mt-0.5">{trackersCount}</p>
-            </div>
-          </div>
-          <div className="bg-card border border-border rounded-xl px-5 py-4 shadow-sm flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 shrink-0"><Camera size={20} /></div>
-            <div>
-              <p className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Cameras Available</p>
-              <p className="text-2xl font-extrabold text-foreground mt-0.5">{camerasCount}</p>
-            </div>
-          </div>
+
+          {/* Dynamic Type Cards */}
+          {types.map((type) => {
+            const count = items
+              .filter(i => i.type === type.name)
+              .reduce((sum, i) => sum + i.quantity, 0);
+            
+            // Assign icons based on category
+            let Icon = Package;
+            let bgColor = "bg-primary/10";
+            let textColor = "text-primary";
+
+            if (type.category_name.toLowerCase().includes("tracker")) {
+              Icon = MapPin;
+              bgColor = "bg-emerald-500/10";
+              textColor = "text-emerald-600";
+            } else if (type.category_name.toLowerCase().includes("camera")) {
+              Icon = Camera;
+              bgColor = "bg-blue-500/10";
+              textColor = "text-blue-600";
+            }
+
+            return (
+              <div key={type.id} className="bg-card border border-border rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 min-w-35">
+                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", bgColor, textColor)}>
+                  <Icon size={16} />
+                </div>
+                <div>
+                  <p className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground truncate max-w-25">{type.name}</p>
+                  <p className="text-lg font-extrabold text-foreground leading-tight">{count}</p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -553,14 +622,16 @@ export default function InventoryView() {
                     {categories.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">No categories yet.</div>}
                   </div>
                   <div className="border-t p-2">
-                    <form onSubmit={handleAddCategory} className="flex gap-2">
+                    <form onSubmit={handleCreateCategory} className="flex gap-2">
                       <Input
                         placeholder="New category..."
                         value={newCatName}
                         onChange={e => setNewCatName(e.target.value)}
                         className="h-8 text-xs"
                       />
-                      <Button type="submit" size="sm" disabled={creatingCat || !newCatName.trim()} className="h-8 text-xs">Add</Button>
+                      <Button type="submit" size="sm" disabled={creatingCat || !newCatName.trim()} className="h-8 text-xs">
+                        {creatingCat ? <Loader2 size={12} className="animate-spin" /> : "Add"}
+                      </Button>
                     </form>
                   </div>
                 </PopoverContent>
@@ -572,15 +643,34 @@ export default function InventoryView() {
               <Input placeholder="e.g. 356938035643809" value={itemForm.imei_number} onChange={e => setItemForm({...itemForm, imei_number: e.target.value})} />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Device Type / Model</Label>
-                <Input placeholder="e.g. FMB920" value={itemForm.type} onChange={e => setItemForm({...itemForm, type: e.target.value})} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Quantity</Label>
-                <Input type="number" min="0" value={itemForm.quantity} onChange={e => setItemForm({...itemForm, quantity: e.target.value})} />
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Device Type / Model</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between font-normal">
+                    {itemForm.type || "Select a type..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <div className="max-h-48 overflow-y-auto p-1">
+                    {types.filter(t => !itemForm.category || t.category_name === itemForm.category).map(t => (
+                      <div
+                        key={t.id}
+                        className="flex cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                        onClick={() => setItemForm({...itemForm, type: t.name, category: t.category_name})}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", itemForm.type === t.name ? "opacity-100" : "opacity-0")} />
+                        <div className="flex flex-col">
+                          <span className="font-medium">{t.name}</span>
+                          <span className="text-[0.65rem] text-muted-foreground">{t.category_name}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {types.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">No types configured.</div>}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
           <DialogFooter>
@@ -669,6 +759,91 @@ export default function InventoryView() {
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
             <Button variant="destructive" onClick={handleConfirmDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 4. Management Modal */}
+      <Dialog open={showManagement} onOpenChange={setShowManagement}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Inventory Configuration</DialogTitle>
+            <DialogDescription>Manage your inventory categories and device types.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-8 py-4">
+            {/* Categories Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <Package size={16} className="text-primary" /> Categories
+              </h3>
+              <form onSubmit={handleCreateCategory} className="flex gap-2">
+                <Input
+                  placeholder="New category name..."
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  className="h-9 text-sm"
+                />
+                <Button type="submit" size="sm" disabled={!newCatName.trim()}>Add</Button>
+              </form>
+              <div className="border rounded-lg divide-y bg-muted/10 max-h-40 overflow-y-auto">
+                {categories.map(cat => (
+                  <div key={cat.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="font-medium">{cat.name}</span>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveCategory(cat.id)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Types Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <Settings2 size={16} className="text-primary" /> Device Models / Types
+              </h3>
+              <form onSubmit={handleCreateType} className="grid grid-cols-2 gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-9 w-full justify-between text-xs px-3">
+                      {typeCatSelect || "Select Category"}
+                      <ChevronsUpDown size={14} className="opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    {categories.map(c => (
+                      <DropdownMenuItem key={c.id} onClick={() => setTypeCatSelect(c.name)}>{c.name}</DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g. FMB920"
+                    value={newTypeName}
+                    onChange={e => setNewTypeName(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                  <Button type="submit" size="sm" disabled={!newTypeName.trim() || !typeCatSelect}>Add</Button>
+                </div>
+              </form>
+              <div className="border rounded-lg divide-y bg-muted/10 max-h-60 overflow-y-auto">
+                {types.map(t => (
+                  <div key={t.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <div>
+                      <span className="font-medium">{t.name}</span>
+                      <Badge variant="outline" className="ml-2 scale-75 origin-left">{t.category_name}</Badge>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveType(t.id)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowManagement(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
