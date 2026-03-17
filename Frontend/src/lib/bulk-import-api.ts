@@ -1,6 +1,6 @@
 import { getAuthToken } from './auth-context';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 function handleUnauthorized() {
   if (typeof window === 'undefined') return;
