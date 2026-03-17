@@ -2,7 +2,7 @@
 
 import { getAuthToken } from './auth-context';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 export const PAYMENT_HISTORY_KEY = "odcms-payment-history";
 
 export interface PaymentRecord {

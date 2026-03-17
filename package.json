@@ -1,0 +1,15 @@
+{
+  "name": "odcm",
+  "version": "1.0.0",
+  "description": "ODCM - Full Stack App",
+  "scripts": {
+    "install:all": "cd Backend && npm install && cd ../Frontend && npm install",
+    "dev": "concurrently -n backend,frontend -c blue,green \"cd Backend && npm run dev\" \"cd Frontend && npm run dev\"",
+    "build": "cd Frontend && npm run build",
+    "start": "concurrently -n backend,frontend -c blue,green \"cd Backend && npm start\" \"cd Frontend && npm start\"",
+    "sync-db": "cd Backend && npm run sync"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
