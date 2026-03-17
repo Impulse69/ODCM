@@ -32,8 +32,11 @@ export interface BulkValidationResult {
     rowNum: number;
     customerStatus: 'New' | 'Existing' | 'Existing (Batch)' | 'Cross-Type';
     customerName: string;
+    matchedCustomerName?: string;
     vehicleStatus: 'Available' | 'Duplicate' | 'Invalid Plan' | 'Invalid Format';
     duplicateReason?: string;
+    valid: boolean;
+    error?: string;
   }[];
 }
 

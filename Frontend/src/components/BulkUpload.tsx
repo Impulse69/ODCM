@@ -49,6 +49,7 @@ export interface BulkRow {
   imei: string;
   plan: string;
   installationDate: string;
+  expiry_date: string;
   expiryDate: string;
   _rowNum: number;
   _error?: string;
@@ -102,7 +103,7 @@ function parseCSV(text: string): { headers: string[]; rows: Record<string, strin
     const vals = splitLine(line);
     const obj: Record<string, string> = {};
     headers.forEach((h, idx) => { obj[h] = vals[idx] ?? ""; });
-    obj.__rowIndex = String(i + 2);
+    obj.__rowIndex = String(i + 1);
     return obj;
   });
 
@@ -462,10 +463,12 @@ export default function BulkUpload() {
         setParsed(true);
         setParsing(false);
 
-        // Pre-validate with backend
-        if (bulkRows.length > 0 && errs.length === 0) {
+        // Pre-validate with backend — only send rows without client errors
+        const rowsToValidate = bulkRows.filter(r => !r._error);
+        if (rowsToValidate.length > 0 && errs.length === 0) {
           setValidating(true);
-          validateBulkImport(bulkRows)
+          // Send _rowNum so backend can return matching rowNums
+          validateBulkImport(rowsToValidate.map(r => ({ ...r, _rowNum: r._rowNum })))
             .then(res => setValidation(res))
             .catch(err => console.error("Validation failed:", err))
             .finally(() => setValidating(false));
@@ -477,7 +480,12 @@ export default function BulkUpload() {
 
   // -- Import via API ---------------------------------------------------------
   const handleImport = useCallback(async () => {
-    const validRows = parsedRows.filter((r) => !r._error);
+    const validRows = parsedRows.filter((r) => {
+      if (r._error) return false;
+      const v = validation?.rows?.find((vr: any) => vr.rowNum === r._rowNum);
+      if (v && v.valid === false) return false;
+      return true;
+    });
     if (!validRows.length) return;
     setImporting(true);
     try {
@@ -497,8 +505,13 @@ export default function BulkUpload() {
     }
   }, [parsedRows]);
 
-  const validCount   = parsedRows.filter((r) => !r._error).length;
-  const invalidCount = parsedRows.filter((r) => !!r._error).length;
+  const validCount   = parsedRows.filter((r) => {
+    if (r._error) return false;
+    const v = validation?.rows?.find((vr: any) => vr.rowNum === r._rowNum);
+    if (v && v.valid === false) return false;
+    return true;
+  }).length;
+  const invalidCount = parsedRows.length - validCount;
 
   return (
     <div className="space-y-4">
@@ -679,7 +692,7 @@ export default function BulkUpload() {
                     </TableHeader>
                     <TableBody>
                       {parsedRows.map((row, idx) => (
-                        <TableRow key={idx} className={cn("text-sm hover:bg-muted/30", row._error && "bg-red-50/60")}>
+                        <TableRow key={idx} className={cn("text-sm hover:bg-muted/30", row._error && "bg-red-50/60", (() => { const v = validation?.rows?.find((vr: any) => vr.rowNum === row._rowNum); return v && v.valid === false ? "bg-red-50/60" : ""; })())}>
                           <TableCell className="text-muted-foreground font-medium">{row._rowNum}</TableCell>
                           <TableCell>
                             {validating ? (
@@ -709,8 +722,11 @@ export default function BulkUpload() {
                                   if (v?.customerStatus === 'New') return (
                                     <Badge variant="outline" className="text-[0.6rem] bg-emerald-50 text-emerald-700 border-emerald-200">New User</Badge>
                                   );
-                                  if (v?.customerStatus === 'Existing' || v?.customerStatus === 'Existing (Batch)') return (
-                                    <Badge variant="secondary" className="text-[0.6rem] bg-blue-50 text-blue-700 border-blue-200">Existing</Badge>
+                                  if (v?.customerStatus === 'Existing (Batch)') return (
+                                    <Badge variant="outline" className="text-[0.6rem] bg-emerald-50 text-emerald-700 border-emerald-200">+ Add Vehicle</Badge>
+                                  );
+                                  if (v?.customerStatus === 'Existing') return (
+                                    <Badge variant="secondary" className="text-[0.6rem] bg-blue-50 text-blue-700 border-blue-200">Existing Customer</Badge>
                                   );
                                   if (v?.customerStatus === 'Cross-Type') return (
                                     <Badge variant="secondary" className="text-[0.6rem] bg-amber-50 text-amber-700 border-amber-200">Cross-Type</Badge>
@@ -744,11 +760,13 @@ export default function BulkUpload() {
                           <TableCell className="text-muted-foreground whitespace-nowrap">{row.expiryDate}</TableCell>
                           <TableCell className="text-muted-foreground whitespace-nowrap">{row.installationDate || "�"}</TableCell>
                           <TableCell>
-                            {row._error && (
-                              <span title={row._error}>
-                                <AlertCircle size={14} className="text-red-500" />
-                              </span>
-                            )}
+                            {(() => {
+                              const v = validation?.rows?.find((vr: any) => vr.rowNum === row._rowNum);
+                              if (row._error) return <span title={row._error}><AlertCircle size={14} className="text-red-500" /></span>;
+                              if (v && v.valid === false) return <span title={v.duplicateReason || v.error || 'Invalid'}><AlertCircle size={14} className="text-red-500" /></span>;
+                              if (v && v.valid === true) return <CheckCircle size={14} className="text-emerald-500" />;
+                              return null;
+                            })()}
                           </TableCell>
                         </TableRow>
                       ))}
