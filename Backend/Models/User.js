@@ -14,8 +14,10 @@ async function createUsersTable() {
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-  // Add phone column if missing (for existing tables)
+  // Add columns if missing (for existing tables)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30)`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_code VARCHAR(6)`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_expires_at TIMESTAMPTZ`);
   console.log('Users table created (or already exists).');
 }
 
@@ -68,4 +70,12 @@ async function changePassword(id, hashedPassword) {
   await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, id]);
 }
 
-module.exports = { createUsersTable, findByEmail, findById, createUser, updateUser, changePassword, seedDefaultAdmin };
+async function setOtp(id, code, expiresAt) {
+  await pool.query('UPDATE users SET otp_code = $1, otp_expires_at = $2 WHERE id = $3', [code, expiresAt, id]);
+}
+
+async function clearOtp(id) {
+  await pool.query('UPDATE users SET otp_code = NULL, otp_expires_at = NULL WHERE id = $1', [id]);
+}
+
+module.exports = { createUsersTable, findByEmail, findById, createUser, updateUser, changePassword, setOtp, clearOtp, seedDefaultAdmin };

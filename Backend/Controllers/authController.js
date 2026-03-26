@@ -1,6 +1,8 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { findByEmail, findById, createUser, updateUser, changePassword } = require('../Models/User');
+const crypto = require('crypto');
+const { findByEmail, findById, createUser, updateUser, changePassword, setOtp, clearOtp } = require('../Models/User');
+const { sendHubtelSms, getConfigFromDb, createSmtpTransport } = require('./SmsController');
 
 if (!process.env.JWT_SECRET) {
   console.error('[FATAL] JWT_SECRET is not set in environment. Server cannot start securely.');
@@ -106,4 +108,136 @@ async function updatePassword(req, res) {
   }
 }
 
-module.exports = { login, signup, getProfile, updateProfile, updatePassword };
+// ─── Forgot Password: send OTP via SMS (or email fallback) ─────────────────
+
+function generateOtp() {
+  return String(crypto.randomInt(100000, 999999));
+}
+
+function maskPhone(phone) {
+  if (!phone || phone.length < 4) return '***';
+  return '***' + phone.slice(-3);
+}
+
+function maskEmail(email) {
+  const [local, domain] = email.split('@');
+  return local[0] + '***@' + domain;
+}
+
+async function forgotPassword(req, res) {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+
+    const user = await findByEmail(email.toLowerCase());
+    if (!user) {
+      // Don't reveal whether email exists
+      return res.json({ success: true, message: 'If that account exists, an OTP has been sent.' });
+    }
+
+    const otp = generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await setOtp(user.id, otp, expiresAt);
+
+    const cfg = await getConfigFromDb();
+
+    if (user.phone && cfg.client_id && cfg.client_secret) {
+      // Send via SMS
+      const message = `Your ODCMS password reset code is ${otp}. Valid for 10 minutes.`;
+      const result = await sendHubtelSms({
+        clientId: cfg.client_id,
+        clientSecret: cfg.client_secret,
+        senderId: cfg.sender_id || 'ODG',
+        to: user.phone,
+        message,
+      });
+      if (result.success) {
+        return res.json({ success: true, method: 'sms', contact: maskPhone(user.phone), message: 'OTP sent via SMS.' });
+      }
+      // SMS failed — fall through to email
+      console.error('[Forgot Password] SMS failed:', result.message);
+    }
+
+    // Fallback: send via email
+    if (cfg.smtp_host && cfg.smtp_user && cfg.smtp_pass) {
+      try {
+        const transport = createSmtpTransport(cfg);
+        await transport.sendMail({
+          from: cfg.smtp_user,
+          to: user.email,
+          subject: 'ODCMS Password Reset Code',
+          text: `Your password reset code is ${otp}. It is valid for 10 minutes.`,
+          html: `<p>Your password reset code is <strong>${otp}</strong>.</p><p>It is valid for 10 minutes.</p>`,
+        });
+        return res.json({ success: true, method: 'email', contact: maskEmail(user.email), message: 'OTP sent via email.' });
+      } catch (emailErr) {
+        console.error('[Forgot Password] Email failed:', emailErr.message);
+      }
+    }
+
+    // Neither SMS nor email worked
+    return res.status(503).json({ success: false, message: 'Unable to send verification code. Please ensure your account has a phone number, or contact your administrator to configure SMS/email services.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+async function verifyOtp(req, res) {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+
+    const user = await findByEmail(email.toLowerCase());
+    if (!user || !user.otp_code) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+    }
+
+    if (user.otp_code !== otp) {
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    if (new Date() > new Date(user.otp_expires_at)) {
+      await clearOtp(user.id);
+      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
+    }
+
+    // Issue a short-lived reset token
+    const resetToken = jwt.sign({ id: user.id, purpose: 'password-reset' }, JWT_SECRET, { expiresIn: '10m' });
+    res.json({ success: true, resetToken });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+async function resetPassword(req, res) {
+  try {
+    const { resetToken, newPassword } = req.body;
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Reset token and new password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(resetToken, JWT_SECRET);
+    } catch {
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset token. Please start over.' });
+    }
+
+    if (decoded.purpose !== 'password-reset') {
+      return res.status(400).json({ success: false, message: 'Invalid reset token' });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await changePassword(decoded.id, hashed);
+    await clearOtp(decoded.id);
+
+    res.json({ success: true, message: 'Password reset successfully. You can now log in.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+module.exports = { login, signup, getProfile, updateProfile, updatePassword, forgotPassword, verifyOtp, resetPassword };

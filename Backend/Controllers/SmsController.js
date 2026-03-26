@@ -468,8 +468,8 @@ async function getConfig(req, res) {
         clientId:           cfg.client_id    || '',
         clientSecretSet:    !!cfg.client_secret,
         senderId:           cfg.sender_id    || 'ODG',
-        dueSoonEnabled:     cfg.due_soon_enabled  !== 'false',
-        expiredEnabled:     cfg.expired_enabled   !== 'false',
+        dueSoonEnabled:     cfg.due_soon_enabled  === 'true',
+        expiredEnabled:     cfg.expired_enabled   === 'true',
         dueSoonTemplate:    cfg.due_soon_template ||
           'Dear {customerName}, your vehicle ({vehiclePlate}) subscription expires in {daysLeft} day(s). Please renew to avoid deactivation. - ODG',
         expiredTemplate:    cfg.expired_template ||
@@ -720,8 +720,8 @@ async function executeSmsJob() {
   const firstDays      = parseInt(cfg.first_reminder_days  || '14');
   const secondDays     = parseInt(cfg.second_reminder_days || '7');
   const thirdDays      = parseInt(cfg.third_reminder_days  || '3');
-  const dueSoonEnabled = cfg.due_soon_enabled !== 'false';
-  const expiredEnabled = cfg.expired_enabled  !== 'false';
+  const dueSoonEnabled = cfg.due_soon_enabled === 'true';
+  const expiredEnabled = cfg.expired_enabled  === 'true';
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
@@ -918,4 +918,7 @@ module.exports = {
   getSmsStats,
   executeSmsJob,
   getRecentSmsLogs,
+  sendHubtelSms,
+  getConfigFromDb,
+  createSmtpTransport,
 };
