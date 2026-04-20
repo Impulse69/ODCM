@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, ArrowLeft, KeyRound, Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { getApiBase } from "../lib/api-base";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const BASE = getApiBase();
 
 async function api<T>(path: string, body: object): Promise<{ success: boolean; data?: T; message?: string }> {
   const res = await fetch(`${BASE}${path}`, {

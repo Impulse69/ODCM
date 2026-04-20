@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import TopNav from "@/components/TopNav";
@@ -23,34 +23,35 @@ import { Activity } from "lucide-react";
 const SIDEBAR_COLLAPSED_WIDTH = 68;
 const SIDEBAR_EXPANDED_WIDTH = 240;
 
+function getInitialSection() {
+  if (typeof window === "undefined") {
+    return "dashboard";
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return params.get("section") ?? "dashboard";
+}
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [activeSection, setActiveSection] = useState("dashboard");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeSection, setActiveSection] = useState(() => getInitialSection());
+  const [sidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // On mount, restore the active section from the URL (?section=...)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const s = params.get("section");
-    if (s) setActiveSection(s);
-  }, []);
+  const handleNavigate = useCallback(
+    (section: string) => {
+      setActiveSection(section);
+      setMobileMenuOpen(false);
+      router.replace(`/dashboard?section=${section}`, { scroll: false });
+    },
+    [router]
+  );
 
-  // Navigate: update state AND URL so refresh lands on the same section
-  const handleNavigate = useCallback((section: string) => {
-    setActiveSection(section);
-    setMobileMenuOpen(false);
-    router.replace(`/?section=${section}`, { scroll: false });
-  }, [router]);
-
-  // Derive current sidebar width for content offset
   const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
-
   const now = new Date();
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
       <Sidebar
         activeSection={activeSection}
         onNavigate={handleNavigate}
@@ -58,24 +59,19 @@ export default function DashboardPage() {
         onMobileClose={() => setMobileMenuOpen(false)}
       />
 
-      {/* Main area */}
       <div
-        className="flex flex-col min-h-screen transition-all duration-300 ease-in-out md:ml-[var(--sidebar-width)] ml-0"
+        className="flex flex-col min-h-screen transition-all duration-300 ease-in-out md:ml-(--sidebar-width) ml-0"
         style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
       >
-        {/* Top Nav */}
         <TopNav
           onNavigate={handleNavigate}
           sidebarWidth={sidebarWidth}
           onMobileMenuToggle={() => setMobileMenuOpen((v) => !v)}
         />
 
-        {/* Page content — pushed below fixed header */}
         <main className="flex-1 px-3 pb-3 pt-20 sm:px-6 sm:pb-6 sm:pt-20 space-y-6">
-          {/* ── Dashboard ──────────────────────────────────────────────────── */}
           {activeSection === "dashboard" && (
             <div className="space-y-6">
-              {/* Welcome header card */}
               <Card className="border border-border shadow-sm overflow-hidden">
                 <CardContent className="p-6">
                   <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
@@ -87,36 +83,24 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* KPIs */}
               <KPICards />
 
-              {/* Charts and Segments */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <RevenueChart />
                 <CustomerSegments />
               </div>
 
-              {/* Subscription table */}
               <SubscriptionTable />
             </div>
           )}
 
-          {/* ── Customers ──────────────────────────────────────────────────── */}
           {activeSection === "customers" && <CustomersView />}
-
-          {/* ── Vehicles ───────────────────────────────────────────────────── */}
           {activeSection === "vehicles" && <VehiclesView />}
-
-          {/* ── Subscriptions ──────────────────────────────────────────────── */}
           {activeSection === "subscriptions" && <SubscriptionsView />}
-
-          {/* ── Removed List ───────────────────────────────────────────────── */}
           {activeSection === "removed" && <RemovedView />}
-          {/* ── Payment History ────────────────────────────────────────────────── */}
           {activeSection === "payment-history" && <PaymentHistoryView />}
-          {/* ── Inventory ──────────────────────────────────────────────────────── */}
           {activeSection === "inventory" && <InventoryView />}
-          {/* ── Bulk Import ────────────────────────────────────────────────── */}
+
           {activeSection === "bulk-import" && (
             <div className="space-y-5">
               <div>
@@ -131,14 +115,10 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── Profile ────────────────────────────────────────────────────── */}
           {activeSection === "profile" && <ProfileView />}
-
-          {/* ── Settings ───────────────────────────────────────────────────── */}
           {activeSection === "settings" && <SettingsView />}
         </main>
 
-        {/* Footer */}
         <footer className="border-t border-border px-6 py-3 flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Activity size={12} className="text-primary" />

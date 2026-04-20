@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { getApiBase } from "./api-base";
 
 export interface User {
   id: number;
@@ -25,7 +26,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const STORAGE_KEY = "odcms_auth_user";
 const TOKEN_KEY   = "odcms_auth_token";
-const API_BASE    = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_BASE = getApiBase();
 
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -118,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     setUser(null);
     clearAuth();
-    router.replace("/login");
+    router.replace("/");
   }, [router]);
 
   return (

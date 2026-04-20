@@ -20,7 +20,7 @@ export default function LoginPage() {
   // Redirect to dashboard if already authenticated
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.replace("/");
+      router.replace("/dashboard");
     }
   }, [isAuthenticated, isLoading, router]);
 
@@ -32,7 +32,7 @@ export default function LoginPage() {
     const result = await login(email, password);
     if (result.success) {
       toastSuccess("Login Successful", "Welcome to the ODCMS dashboard.");
-      router.push("/");
+      router.push("/dashboard");
     } else {
       const msg = result.error || "Login failed";
       setError(msg);

@@ -1,8 +1,9 @@
 // Payment history — persists to the backend DB; localStorage used as offline fallback.
 
 import { getAuthToken } from './auth-context';
+import { getApiBase } from './api-base';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+const BASE = getApiBase();
 export const PAYMENT_HISTORY_KEY = "odcms-payment-history";
 
 export interface PaymentRecord {
