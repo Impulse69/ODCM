@@ -1,3 +1,27 @@
+// Find company by name only
+async function findCompanyByName(company_name) {
+  const { rows } = await pool.query('SELECT * FROM companies WHERE company_name = $1', [company_name]);
+  return rows[0] ?? null;
+}
+// Find individual by name
+async function findIndividualByName(name) {
+  const { rows } = await pool.query('SELECT * FROM individual_customers WHERE name = $1', [name]);
+  return rows[0] ?? null;
+}
+// Find individual by phone
+async function findIndividualByPhone(phone) {
+  const { rows } = await pool.query('SELECT * FROM individual_customers WHERE phone = $1', [phone]);
+  return rows[0] ?? null;
+}
+
+// Find company by name or email
+async function findCompanyByNameOrEmail(company_name, email) {
+  const { rows } = await pool.query(
+    'SELECT * FROM companies WHERE company_name = $1 OR (email IS NOT NULL AND email = $2)',
+    [company_name, email]
+  );
+  return rows[0] ?? null;
+}
 const pool = require('../Config/db');
 
 // ─── Create Tables ────────────────────────────────────────────────────────────
@@ -78,6 +102,21 @@ async function createTables() {
     CREATE INDEX IF NOT EXISTS idx_subscriptions_expiry     ON subscriptions(expiry_date);
   `);
 
+  // ── Individual extra columns (idempotent ALTERs) ─────────────────────────────
+  await pool.query(`
+    ALTER TABLE individual_customers ADD COLUMN IF NOT EXISTS contact_person VARCHAR(150) DEFAULT NULL;
+    ALTER TABLE individual_customers ADD COLUMN IF NOT EXISTS email          VARCHAR(150) DEFAULT NULL;
+    ALTER TABLE individual_customers ADD COLUMN IF NOT EXISTS address        TEXT         DEFAULT NULL;
+    ALTER TABLE individual_customers ADD COLUMN IF NOT EXISTS city           VARCHAR(100) DEFAULT NULL;
+    ALTER TABLE individual_customers ADD COLUMN IF NOT EXISTS postal_code    VARCHAR(20)  DEFAULT NULL;
+  `);
+
+  // ── Company extra columns (idempotent ALTERs) ─────────────────────────────────
+  await pool.query(`
+    ALTER TABLE companies ADD COLUMN IF NOT EXISTS city        VARCHAR(100) DEFAULT NULL;
+    ALTER TABLE companies ADD COLUMN IF NOT EXISTS postal_code VARCHAR(20)  DEFAULT NULL;
+  `);
+
   // ── SMS columns (idempotent ALTERs) ──────────────────────────────────────────
   await pool.query(`
     ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS sms_status    VARCHAR(20)  DEFAULT NULL;
@@ -103,7 +142,15 @@ async function getAllIndividuals() {
     SELECT
       c.*,
       COUNT(s.id)::INT                    AS vehicle_count,
-      COALESCE(SUM(s.monthly_amount), 0)  AS total_monthly,
+      COALESCE(SUM(
+        CASE 
+          WHEN s.expiry_date < CURRENT_DATE AND s.trakzee_status = 'Active' THEN 
+            CEIL(
+              EXTRACT(DAY FROM (NOW() - s.expiry_date)) / 30.0
+            ) * s.monthly_amount
+          ELSE 0 
+        END
+      ), 0)                               AS total_owed,
       MIN(
         CASE s.status
           WHEN 'Suspended' THEN 1
@@ -128,23 +175,28 @@ async function getIndividualById(id) {
   return rows[0] ?? null;
 }
 
-async function createIndividual({ id, name, phone }) {
+async function createIndividual({ id, name, phone, contact_person, email, address, city, postal_code }) {
   const { rows } = await pool.query(
-    `INSERT INTO individual_customers (id, name, phone)
-     VALUES ($1, $2, $3)
+    `INSERT INTO individual_customers (id, name, phone, contact_person, email, address, city, postal_code)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [id, name, phone]
+    [id, name, phone, contact_person ?? null, email ?? null, address ?? null, city ?? null, postal_code ?? null]
   );
   return rows[0];
 }
 
 async function updateIndividual(id, fields) {
+  const allowed = ['name', 'phone', 'contact_person', 'email', 'address', 'city', 'postal_code'];
   const updates = [];
   const values  = [];
   let   idx     = 1;
 
-  if (fields.name)  { updates.push(`name  = $${idx++}`); values.push(fields.name);  }
-  if (fields.phone) { updates.push(`phone = $${idx++}`); values.push(fields.phone); }
+  for (const key of allowed) {
+    if (fields[key] !== undefined) {
+      updates.push(`${key} = $${idx++}`);
+      values.push(fields[key]);
+    }
+  }
   if (!updates.length) return getIndividualById(id);
 
   updates.push(`updated_at = NOW()`);
@@ -168,7 +220,15 @@ async function getAllCompanies() {
     SELECT
       c.*,
       COUNT(s.id)::INT                    AS vehicle_count,
-      COALESCE(SUM(s.monthly_amount), 0)  AS total_monthly,
+      COALESCE(SUM(
+        CASE 
+          WHEN s.expiry_date < CURRENT_DATE AND s.trakzee_status = 'Active' THEN 
+            CEIL(
+              EXTRACT(DAY FROM (NOW() - s.expiry_date)) / 30.0
+            ) * s.monthly_amount
+          ELSE 0 
+        END
+      ), 0)                               AS total_owed,
       MIN(
         CASE s.status
           WHEN 'Suspended' THEN 1
@@ -193,20 +253,21 @@ async function getCompanyById(id) {
   return rows[0] ?? null;
 }
 
-async function createCompany({ id, company_name, billing_contact_name, contact_phone, email, address, tax_id, status, total_accounts }) {
+async function createCompany({ id, company_name, billing_contact_name, contact_phone, email, address, city, postal_code, tax_id, status, total_accounts }) {
   const { rows } = await pool.query(
     `INSERT INTO companies
-       (id, company_name, billing_contact_name, contact_phone, email, address, tax_id, status, total_accounts)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (id, company_name, billing_contact_name, contact_phone, email, address, city, postal_code, tax_id, status, total_accounts)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING *`,
     [id, company_name, billing_contact_name ?? null, contact_phone ?? null,
-     email ?? null, address ?? null, tax_id ?? null, status ?? 'Active', total_accounts ?? 0]
+     email ?? null, address ?? null, city ?? null, postal_code ?? null,
+     tax_id ?? null, status ?? 'Active', total_accounts ?? 0]
   );
   return rows[0];
 }
 
 async function updateCompany(id, fields) {
-  const allowed = ['company_name','billing_contact_name','contact_phone','email','address','tax_id','status','total_accounts'];
+  const allowed = ['company_name','billing_contact_name','contact_phone','email','address','city','postal_code','tax_id','status','total_accounts'];
   const updates = [];
   const values  = [];
   let   idx     = 1;
@@ -252,7 +313,7 @@ async function getAllSubscriptions() {
 
 async function getSubscriptionsByIndividual(individualId) {
   const { rows } = await pool.query(
-    `SELECT * FROM subscriptions WHERE individual_customer_id = $1 AND status != 'Removed' ORDER BY expiry_date`,
+    `SELECT * FROM subscriptions WHERE individual_customer_id = $1 ORDER BY expiry_date`,
     [individualId]
   );
   return rows;
@@ -260,7 +321,7 @@ async function getSubscriptionsByIndividual(individualId) {
 
 async function getSubscriptionsByCompany(companyId) {
   const { rows } = await pool.query(
-    `SELECT * FROM subscriptions WHERE company_id = $1 AND status != 'Removed' ORDER BY expiry_date`,
+    `SELECT * FROM subscriptions WHERE company_id = $1 ORDER BY expiry_date`,
     [companyId]
   );
   return rows;
@@ -323,6 +384,8 @@ async function deleteSubscription(id) {
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
+      findCompanyByName,
+    findIndividualByName,
   createTables,
 
   // Individuals
@@ -346,4 +409,7 @@ module.exports = {
   createSubscription,
   updateSubscription,
   deleteSubscription,
+  // Duplicate check helpers
+  findIndividualByPhone,
+  findCompanyByNameOrEmail,
 };

@@ -49,7 +49,7 @@ async function signup(req, res) {
       return res.status(409).json({ success: false, message: 'Email already registered' });
     }
 
-    const user = await createUser({ email: email.toLowerCase(), password, name: username, role: 'Staff' });
+    const user = await createUser({ email: email.toLowerCase(), password, name: username, role: 'Admin' });
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
     res.status(201).json({ success: true, user, token });
   } catch (err) {

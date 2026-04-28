@@ -34,10 +34,10 @@ async function getPayment(req, res) {
 }
 
 // ─── POST /api/payments ───────────────────────────────────────────────────────
-// Body: { id, vehicle_id, vehicle_plate, owner_name, owner_type, year, months, amount_ghs }
+// Body: { id, vehicle_id, vehicle_plate, owner_name, owner_type, plan_name, year, months, amount_ghs }
 async function addPayment(req, res) {
   try {
-    const { id, vehicle_id, vehicle_plate, owner_name, owner_type, year, months, amount_ghs } = req.body;
+    const { id, vehicle_id, vehicle_plate, owner_name, owner_type, plan_name, year, months, amount_ghs, paid_at } = req.body;
 
     if (!id || !vehicle_plate || !owner_name || !owner_type || !year || !months || !amount_ghs) {
       return res.status(400).json({
@@ -49,7 +49,7 @@ async function addPayment(req, res) {
       return res.status(400).json({ success: false, message: 'owner_type must be "individual" or "company".' });
     }
 
-    const record = await createPayment({ id, vehicle_id, vehicle_plate, owner_name, owner_type, year, months, amount_ghs });
+    const record = await createPayment({ id, vehicle_id, vehicle_plate, owner_name, owner_type, plan_name, year, months, amount_ghs, paid_at });
     res.status(201).json({ success: true, data: record });
   } catch (err) {
     if (err.code === '23505') {

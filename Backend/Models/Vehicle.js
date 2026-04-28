@@ -117,7 +117,7 @@ async function updateVehicle(id, fields) {
   const allowed = [
     'plate_number', 'imei', 'plan', 'monthly_amount',
     'expiry_date', 'installation_date', 'status', 'trakzee_status',
-    'sms_status', 'sms_sent_at', 'last_sms_type',
+    'sms_status', 'sms_sent_at', 'last_sms_type', 'grace_period_days',
   ];
   const updates = [];
   const values  = [];
@@ -145,7 +145,7 @@ async function updateVehicle(id, fields) {
 async function deleteVehicle(id) {
   await pool.query(
     `UPDATE subscriptions
-     SET status = 'Removed', trakzee_status = 'Deactivated', updated_at = NOW()
+     SET status = 'Removed', updated_at = NOW()
      WHERE id = $1`,
     [id]
   );
@@ -169,7 +169,7 @@ async function restoreVehicle(id) {
   const restoredStatus = expiry < today ? 'Expired' : 'Active';
   const { rows } = await pool.query(
     `UPDATE subscriptions
-     SET status = $1, trakzee_status = 'Active', updated_at = NOW()
+     SET status = $1, updated_at = NOW()
      WHERE id = $2
      RETURNING *`,
     [restoredStatus, id]
@@ -190,13 +190,23 @@ async function setTrakzeeStatus(id, trakzee_status) {
   return rows[0] ?? null;
 }
 
-// Suspend all vehicles whose expiry_date has passed and are not already suspended
+async function findVehicleByPlateOrImei(plate, imei) {
+  const { rows } = await pool.query(
+    `${BASE_SELECT} WHERE s.plate_number = $1 OR s.imei = $2`,
+    [plate, imei]
+  );
+  return rows[0] ?? null;
+}
+
+// Move expired vehicles to 'Removed' status immediately
 async function suspendExpired() {
   const { rows } = await pool.query(`
     UPDATE subscriptions
-    SET    status = 'Suspended', trakzee_status = 'Deactivated', updated_at = NOW()
+    SET    status = 'Removed', 
+           trakzee_status = 'Deactivated',
+           updated_at = NOW()
     WHERE  expiry_date < CURRENT_DATE
-      AND  status != 'Suspended'
+      AND  status != 'Removed'
     RETURNING id, plate_number, expiry_date
   `);
   return rows;
@@ -214,5 +224,6 @@ module.exports = {
   updateVehicle,
   deleteVehicle,
   setTrakzeeStatus,
+  findVehicleByPlateOrImei,
   suspendExpired,
 };

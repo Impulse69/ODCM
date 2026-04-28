@@ -9,7 +9,7 @@ async function createUsersTable() {
       password    VARCHAR(255) NOT NULL,
       name        VARCHAR(150) NOT NULL,
       phone       VARCHAR(30),
-      role        VARCHAR(50)  NOT NULL DEFAULT 'Staff',
+      role        VARCHAR(50)  NOT NULL DEFAULT 'Admin',
       initials    VARCHAR(5),
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -35,7 +35,7 @@ async function createUser({ email, password, name, role }) {
 
   const { rows } = await pool.query(
     `INSERT INTO users (email, password, name, role, initials) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role, initials`,
-    [email, hashed, name, role ?? 'Staff', initials]
+    [email, hashed, name, role ?? 'Admin', initials]
   );
   return rows[0];
 }
@@ -43,7 +43,7 @@ async function createUser({ email, password, name, role }) {
 async function seedDefaultAdmin() {
   const existing = await findByEmail('admin@odg.com.gh');
   if (!existing) {
-    await createUser({ email: 'admin@odg.com.gh', password: 'admin123', name: 'System Administrator', role: 'ODG Master' });
+    await createUser({ email: 'admin@odg.com.gh', password: 'admin123', name: 'System Administrator', role: 'Super Admin' });
     console.log('Default admin seeded.');
   }
 }

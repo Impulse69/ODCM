@@ -12,11 +12,11 @@ import {
     ChevronLeft,
     ChevronRight,
     History,
-    Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/lib/auth-context";
 
 interface NavItem {
     id: string;
@@ -37,6 +37,11 @@ const navItems: NavItem[] = [
     { id: "bulk-import", label: "Bulk Import", icon: <Upload size={20} />, section: "tools" },
 ];
 
+function isSuperAdminRole(role?: string) {
+    const normalized = String(role ?? "").trim().toLowerCase().replace(/[_\s]+/g, " ");
+    return normalized === "super admin";
+}
+
 interface SidebarProps {
     activeSection: string;
     onNavigate: (section: string) => void;
@@ -46,8 +51,14 @@ interface SidebarProps {
 
 export default function Sidebar({ activeSection, onNavigate, mobileOpen, onMobileClose }: SidebarProps) {
     const [collapsed, setCollapsed] = useState(false);
+    const { user } = useAuth();
+    const canAccessInventory = isSuperAdminRole(user?.role);
 
-    const mainItems = navItems.filter((n) => n.section === "main");
+    const mainItems = navItems.filter(
+        (n) =>
+            n.section === "main" &&
+            (n.id !== "inventory" || canAccessInventory)
+    );
     const toolItems = navItems.filter((n) => n.section === "tools");
 
     const NavLink = ({ item }: { item: NavItem }) => {

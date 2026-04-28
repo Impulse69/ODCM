@@ -45,6 +45,8 @@ export interface Vehicle {
   sms_status: 'Sent' | 'Failed' | null;
   sms_sent_at: string | null;
   last_sms_type: 'due_soon' | 'expired' | null;
+  grace_period_days: number;
+  updated_at: string;
 }
 
 export interface AddVehiclePayload {

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, Plus, MoreHorizontal, Car, Loader2, AlertCircle, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Trash2 } from "lucide-react";
@@ -73,7 +73,15 @@ export default function CustomersView() {
 
     function openEditIndividual(c: IndividualCustomer) {
         setEditIndividual(c);
-        setEditForm({ name: c.name, phone: c.phone });
+        setEditForm({
+            name: c.name,
+            phone: c.phone,
+            contact_person: c.contact_person ?? "",
+            email: c.email ?? "",
+            address: c.address ?? "",
+            city: c.city ?? "",
+            postal_code: c.postal_code ?? "",
+        });
     }
 
     function openEditCompany(co: Company) {
@@ -84,6 +92,8 @@ export default function CustomersView() {
             contact_phone: co.contact_phone ?? "",
             email: co.email ?? "",
             address: co.address ?? "",
+            city: co.city ?? "",
+            postal_code: co.postal_code ?? "",
             tax_id: co.tax_id ?? "",
         });
     }
@@ -92,7 +102,15 @@ export default function CustomersView() {
         if (!editIndividual) return;
         setSaving(true);
         try {
-            await updateIndividual(editIndividual.id, { name: editForm.name, phone: editForm.phone });
+            await updateIndividual(editIndividual.id, {
+                name: editForm.name,
+                phone: editForm.phone,
+                contact_person: editForm.contact_person || undefined,
+                email: editForm.email || undefined,
+                address: editForm.address || undefined,
+                city: editForm.city || undefined,
+                postal_code: editForm.postal_code || undefined,
+            });
             setEditIndividual(null);
             fetchData();
         } finally {
@@ -110,6 +128,8 @@ export default function CustomersView() {
                 contact_phone: editForm.contact_phone,
                 email: editForm.email,
                 address: editForm.address,
+                city: editForm.city,
+                postal_code: editForm.postal_code,
                 tax_id: editForm.tax_id,
             });
             setEditCompany(null);
@@ -312,7 +332,7 @@ export default function CustomersView() {
                                                 </Badge>
                                             </div>
                                             <p className={cn("text-sm font-semibold tabular-nums", isNegative ? "text-red-500" : "text-foreground")}>
-                                                ${Number(c.total_monthly).toFixed(2)}
+                                                GH₵{Number(c.total_owed).toFixed(2)}
                                             </p>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -366,7 +386,7 @@ export default function CustomersView() {
                                                     {status}
                                                 </Badge>
                                                 <span className={cn("font-semibold tabular-nums ml-auto", isNegative ? "text-red-500" : "text-foreground")}>
-                                                    ${Number(c.total_monthly).toFixed(2)}
+                                                    GH₵{Number(c.total_owed).toFixed(2)}
                                                 </span>
                                             </div>
                                         </div>
@@ -402,7 +422,7 @@ export default function CustomersView() {
                                                 </Badge>
                                             </div>
                                             <p className={cn("text-sm font-semibold tabular-nums", isNegative ? "text-red-500" : "text-foreground")}>
-                                                ${Number(co.total_monthly).toFixed(2)}
+                                                GH₵{Number(co.total_owed).toFixed(2)}
                                             </p>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -456,7 +476,7 @@ export default function CustomersView() {
                                                     {status}
                                                 </Badge>
                                                 <span className={cn("font-semibold tabular-nums ml-auto", isNegative ? "text-red-500" : "text-foreground")}>
-                                                    ${Number(co.total_monthly).toFixed(2)}
+                                                    GH₵{Number(co.total_owed).toFixed(2)}
                                                 </span>
                                             </div>
                                         </div>
@@ -532,11 +552,11 @@ export default function CustomersView() {
             {/* ── Edit Individual Dialog ── */}
             {editIndividual && (
                 <Dialog open onOpenChange={(open) => { if (!open) setEditIndividual(null); }}>
-                    <DialogContent className="sm:max-w-md">
+                    <DialogContent className="sm:max-w-lg">
                         <DialogHeader>
                             <DialogTitle>Edit Individual</DialogTitle>
                         </DialogHeader>
-                        <div className="space-y-4 py-2">
+                        <div className="grid grid-cols-2 gap-4 py-2">
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Name</label>
                                 <input
@@ -550,6 +570,46 @@ export default function CustomersView() {
                                 <input
                                     value={editForm.phone}
                                     onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                                    className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Contact Person</label>
+                                <input
+                                    value={editForm.contact_person}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, contact_person: e.target.value }))}
+                                    className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Email</label>
+                                <input
+                                    value={editForm.email}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                                    className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+                                />
+                            </div>
+                            <div className="col-span-2 space-y-1.5">
+                                <label className="text-sm font-medium">Address</label>
+                                <input
+                                    value={editForm.address}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+                                    className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">City</label>
+                                <input
+                                    value={editForm.city}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
+                                    className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Postal Code</label>
+                                <input
+                                    value={editForm.postal_code}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, postal_code: e.target.value }))}
                                     className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
                                 />
                             </div>
@@ -618,6 +678,22 @@ export default function CustomersView() {
                                 <input
                                     value={editForm.address}
                                     onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+                                    className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">City</label>
+                                <input
+                                    value={editForm.city}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
+                                    className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Postal Code</label>
+                                <input
+                                    value={editForm.postal_code}
+                                    onChange={(e) => setEditForm((f) => ({ ...f, postal_code: e.target.value }))}
                                     className="w-full h-9 px-3 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
                                 />
                             </div>

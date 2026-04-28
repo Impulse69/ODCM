@@ -10,7 +10,9 @@ const {
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 function generatePlanId(name) {
-  return `plan_${name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `plan_${ts}_${rand}`;
 }
 
 // ─── GET /api/plans ───────────────────────────────────────────────────────────
@@ -45,12 +47,20 @@ async function addPlan(req, res) {
     if (!name || price === undefined) {
       return res.status(400).json({ success: false, message: 'name and price are required.' });
     }
+
+    if (String(name).length > 100) {
+      return res.status(400).json({ success: false, message: 'Plan name must be 100 characters or fewer.' });
+    }
+
     const id = generatePlanId(name);
     const plan = await createPlan({ id, name, price, description, features, popular, is_active });
     res.status(201).json({ success: true, data: plan });
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({ success: false, message: 'A plan with this name already exists.' });
+    }
+    if (err.code === '22001') {
+      return res.status(400).json({ success: false, message: 'One or more fields are too long for the database schema.' });
     }
     res.status(500).json({ success: false, message: err.message });
   }
@@ -61,12 +71,20 @@ async function addPlan(req, res) {
 async function editPlan(req, res) {
   try {
     const { name, price, description, features, popular, is_active } = req.body;
+
+    if (name !== undefined && String(name).length > 100) {
+      return res.status(400).json({ success: false, message: 'Plan name must be 100 characters or fewer.' });
+    }
+
     const updated = await updatePlan(req.params.id, { name, price, description, features, popular, is_active });
     if (!updated) return res.status(404).json({ success: false, message: 'Plan not found.' });
     res.json({ success: true, data: updated });
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({ success: false, message: 'A plan with this name already exists.' });
+    }
+    if (err.code === '22001') {
+      return res.status(400).json({ success: false, message: 'One or more fields are too long for the database schema.' });
     }
     res.status(500).json({ success: false, message: err.message });
   }

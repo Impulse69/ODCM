@@ -51,7 +51,9 @@ export default function AddCompanyForm({ onCreated }: { onCreated?: () => void }
         billing_contact_name: values.contactPerson || undefined,
         contact_phone: values.telephone || undefined,
         email: values.email || undefined,
-        address: values.address ? `${values.address}, ${values.city} ${values.postalCode}`.trim() : undefined,
+        address: values.address || undefined,
+        city: values.city || undefined,
+        postal_code: values.postalCode || undefined,
         tax_id: values.taxId || undefined,
       })
       form.reset()

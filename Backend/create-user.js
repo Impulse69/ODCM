@@ -7,6 +7,17 @@ const pool = require('./Config/db');
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+const VALID_ROLES = ['Admin', 'Super Admin'];
+
+function normalizeRole(input) {
+  const normalized = String(input ?? '').trim().toLowerCase().replace(/[_\s]+/g, ' ');
+
+  if (!normalized) return 'Admin';
+  if (normalized === 'admin') return 'Admin';
+  if (normalized === 'super admin') return 'Super Admin';
+
+  return null;
+}
 
 async function main() {
   console.log('\n=== ODCMS — Create User ===\n');
@@ -16,7 +27,15 @@ async function main() {
   const name     = await ask('Full name: ');
   const email    = (await ask('Email: ')).toLowerCase().trim();
   const password = await ask('Password: ');
-  const role     = (await ask('Role (Staff / Admin / ODG Master) [Staff]: ')).trim() || 'Staff';
+  const roleInput = await ask('Role (Admin / Super Admin) [Admin]: ');
+  const role = normalizeRole(roleInput);
+
+  if (!role) {
+    console.error(`\nError: Invalid role. Use one of: ${VALID_ROLES.join(', ')}.`);
+    rl.close();
+    await pool.end();
+    process.exit(1);
+  }
 
   const existing = await findByEmail(email);
   if (existing) {

@@ -10,12 +10,29 @@ async function createPaymentHistoryTable() {
       vehicle_plate VARCHAR(20)  NOT NULL,
       owner_name    VARCHAR(200) NOT NULL,
       owner_type    VARCHAR(20)  NOT NULL CHECK (owner_type IN ('individual', 'company')),
+      plan_name     VARCHAR(100),
       year          INTEGER      NOT NULL,
       months        INTEGER      NOT NULL CHECK (months BETWEEN 1 AND 36),
       amount_ghs    NUMERIC(10,2) NOT NULL CHECK (amount_ghs > 0),
+      service_period VARCHAR(100),
       paid_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
       created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
     )
+  `);
+
+  // Migration: Add service_period column if it doesn't exist
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE payment_history ADD COLUMN service_period VARCHAR(100);
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
+  `);
+
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE payment_history ADD COLUMN plan_name VARCHAR(100);
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
   `);
 
   // Widen months constraint for existing tables (24 → 36)
@@ -47,7 +64,14 @@ async function getAllPayments({ vehicle_id, owner_type, limit = 200 } = {}) {
   values.push(limit);
 
   const { rows } = await pool.query(
-    `SELECT * FROM payment_history ${where} ORDER BY paid_at DESC LIMIT $${idx}`,
+    `SELECT
+       ph.*,
+       COALESCE(ph.plan_name, s.plan) AS plan_name
+     FROM payment_history ph
+     LEFT JOIN subscriptions s ON s.id = ph.vehicle_id
+     ${where.replace(/vehicle_id/g, "ph.vehicle_id").replace(/owner_type/g, "ph.owner_type")}
+     ORDER BY ph.paid_at DESC
+     LIMIT $${idx}`,
     values
   );
   return rows;
@@ -55,19 +79,24 @@ async function getAllPayments({ vehicle_id, owner_type, limit = 200 } = {}) {
 
 async function getPaymentById(id) {
   const { rows } = await pool.query(
-    'SELECT * FROM payment_history WHERE id = $1',
+    `SELECT
+       ph.*,
+       COALESCE(ph.plan_name, s.plan) AS plan_name
+     FROM payment_history ph
+     LEFT JOIN subscriptions s ON s.id = ph.vehicle_id
+     WHERE ph.id = $1`,
     [id]
   );
   return rows[0] ?? null;
 }
 
-async function createPayment({ id, vehicle_id, vehicle_plate, owner_name, owner_type, year, months, amount_ghs }) {
+async function createPayment({ id, vehicle_id, vehicle_plate, owner_name, owner_type, plan_name, year, months, amount_ghs, service_period, paid_at }) {
   const { rows } = await pool.query(
     `INSERT INTO payment_history
-       (id, vehicle_id, vehicle_plate, owner_name, owner_type, year, months, amount_ghs)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (id, vehicle_id, vehicle_plate, owner_name, owner_type, plan_name, year, months, amount_ghs, service_period, paid_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, NOW()))
      RETURNING *`,
-    [id, vehicle_id ?? null, vehicle_plate, owner_name, owner_type, year, months, amount_ghs]
+    [id, vehicle_id ?? null, vehicle_plate, owner_name, owner_type, plan_name ?? null, year, months, amount_ghs, service_period ?? null, paid_at ?? null]
   );
   return rows[0];
 }

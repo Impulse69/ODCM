@@ -32,9 +32,14 @@ export interface IndividualCustomer {
   id: string;
   name: string;
   phone: string;
+  contact_person: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  postal_code: string | null;
   initials: string;
   vehicle_count: number;
-  total_monthly: number;
+  total_owed: number;
   worst_priority: number; // 1=Suspended 2=Overdue 3=Due Soon 4=Active
 }
 
@@ -45,11 +50,13 @@ export interface Company {
   contact_phone: string | null;
   email: string | null;
   address: string | null;
+  city: string | null;
+  postal_code: string | null;
   tax_id: string | null;
   status: string;
   total_accounts: number;
   vehicle_count: number;
-  total_monthly: number;
+  total_owed: number;
   worst_priority: number;
 }
 
@@ -58,13 +65,29 @@ export interface Company {
 export const getIndividuals = () =>
   request<IndividualCustomer[]>('/api/customers/individuals');
 
-export const createIndividual = (body: { name: string; phone: string }) =>
+export const createIndividual = (body: {
+  name: string;
+  phone: string;
+  contact_person?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+}) =>
   request<IndividualCustomer>('/api/customers/individuals', {
     method: 'POST',
     body: JSON.stringify(body),
   });
 
-export const updateIndividual = (id: string, body: { name?: string; phone?: string }) =>
+export const updateIndividual = (id: string, body: {
+  name?: string;
+  phone?: string;
+  contact_person?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+}) =>
   request<IndividualCustomer>(`/api/customers/individuals/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
@@ -84,6 +107,8 @@ export const createCompany = (body: {
   contact_phone?: string;
   email?: string;
   address?: string;
+  city?: string;
+  postal_code?: string;
   tax_id?: string;
 }) =>
   request<Company>('/api/customers/companies', {
@@ -97,6 +122,8 @@ export const updateCompany = (id: string, body: {
   contact_phone?: string;
   email?: string;
   address?: string;
+  city?: string;
+  postal_code?: string;
   tax_id?: string;
 }) =>
   request<Company>(`/api/customers/companies/${id}`, {
@@ -118,9 +145,11 @@ export interface CustomerVehicle {
   expiry_date: string;
   installation_date: string | null;
   status: string;
-  trakzee_status: string;
+  trakzee_status: 'Active' | 'Deactivated';
   sms_status: string | null;
   sms_sent_at: string | null;
+  grace_period_days: number;
+  updated_at: string;
 }
 
 export const getIndividualById = (id: string) =>

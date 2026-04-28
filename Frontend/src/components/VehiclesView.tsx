@@ -11,12 +11,17 @@ import {
   Loader2,
   AlertCircle,
   Plus,
+  Car,
+  Trash2,
+  Edit,
   ChevronLeft,
   ChevronRight,
   TrendingUp,
   TrendingDown,
   CreditCard,
   MessageSquare,
+  ArrowRight,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +59,7 @@ import { getIndividuals, getCompanies, type IndividualCustomer, type Company } f
 import { savePayment } from "@/lib/payment-history";
 import { getPlans, type Plan } from "@/lib/plans-api";
 import { cn } from "@/lib/utils";
-import { computeStatus } from "@/lib/vehicle-status";
+import { computeStatus, calculateOwed } from "@/lib/vehicle-status";
 
 /** Convert any date string (ISO timestamp or YYYY-MM-DD) to plain YYYY-MM-DD */
 function toDateStr(raw: string): string {
@@ -92,12 +97,13 @@ const emptyForm = {
   phone: "",
   imei: "",
   plan: "",
-  trakzeeStatus: "" as "" | "Active" | "Deactivated",
-  installationDate: "",
-  expiryDate: "",
+  trakzeeStatus: "Active" as "Active" | "Deactivated",
+  installationDate: todayISO(),
+  months: "1",
+  expiryDate: addMonths(todayISO(), 1),
 };
 
-export default function VehiclesView() {
+export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) => void }) {
   const [search, setSearch] = useState("");
   const [vehicleList, setVehicleList] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,13 +171,15 @@ export default function VehiclesView() {
   // ── Derived ─────────────────────────────────────────────────────────────────
   const vehicles = useMemo(
     () =>
-      vehicleList.filter(
-        (s) =>
+      vehicleList.filter((s) => {
+        const matchesSearch =
           !search ||
           s.plate_number.toLowerCase().includes(search.toLowerCase()) ||
           s.imei.includes(search) ||
-          s.customer_name.toLowerCase().includes(search.toLowerCase()),
-      ),
+          s.customer_name.toLowerCase().includes(search.toLowerCase());
+
+        return matchesSearch;
+      }),
     [search, vehicleList],
   );
 
@@ -187,11 +195,17 @@ export default function VehiclesView() {
 
   const syncedCount   = vehicleList.filter((s) => s.trakzee_status === "Active").length;
   const desyncedCount = vehicleList.filter((s) => s.trakzee_status === "Deactivated").length;
-  const expiredCount  = vehicleList.filter((s) => computeStatus(s.expiry_date, s.status) === "Expired").length;
+   const expiredCount  = vehicleList.filter((s) => {
+    const status = computeStatus(s.expiry_date, s.status);
+    return status === "Removed" || status === "Expired" || status === "Suspended" || s.status === "Removed";
+  }).length;
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   const handleOpenForm = () => {
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      plan: dbPlans.length > 0 ? dbPlans[0].name : "",
+    });
     setCustomerSearch("");
     setSaveError(null);
     setShowForm(true);
@@ -208,7 +222,7 @@ export default function VehiclesView() {
     setSaving(true);
     setSaveError(null);
     try {
-      await addVehicle({
+      const vehicle = await addVehicle({
         plate_number: form.plateNumber,
         imei: form.imei,
         plan: form.plan,
@@ -218,6 +232,24 @@ export default function VehiclesView() {
         individual_customer_id: form.ownerType === "individual" ? form.ownerId : undefined,
         company_id: form.ownerType === "company" ? form.ownerId : undefined,
       });
+
+      // Save initial payment record
+      const selectedPlan = dbPlans.find(p => p.name === form.plan);
+      const amount = selectedPlan ? (selectedPlan.price * parseInt(form.months)) : 0;
+      if (amount > 0 && vehicle) {
+        await savePayment({
+          vehicleId: vehicle.id,
+          vehiclePlate: form.plateNumber,
+          ownerName: form.ownerName,
+          ownerType: form.ownerType as "individual" | "company",
+          planName: form.plan,
+          year: new Date(form.installationDate).getFullYear(),
+          months: parseInt(form.months),
+          amountGhs: amount,
+          paidAt: new Date(form.installationDate).toISOString(),
+        }).catch(() => {});
+      }
+
       setShowForm(false);
       fetchVehicles();
     } catch (err) {
@@ -284,23 +316,23 @@ export default function VehiclesView() {
 
   // ── Payment dialog ────────────────────────────────────────────────────────
   const [payTarget, setPayTarget] = useState<Vehicle | null>(null);
-  const [payForm, setPayForm] = useState({ year: new Date().getFullYear().toString(), months: "1", amount: "" });
+  const [payForm, setPayForm] = useState({ paymentDate: todayISO(), months: "1", amount: "" });
   const [payError, setPayError] = useState<string | null>(null);
 
   const handleOpenPay = (v: Vehicle) => {
     setPayTarget(v);
     const base = v.monthly_amount ?? 0;
-    setPayForm({ year: new Date().getFullYear().toString(), months: "1", amount: String(base) });
+    setPayForm({ paymentDate: todayISO(), months: "1", amount: String(base) });
     setPayError(null);
   };
 
   const handleConfirmPay = async () => {
     if (!payTarget) return;
-    const year = parseInt(payForm.year);
+    const year = new Date(payForm.paymentDate).getFullYear();
     const months = parseInt(payForm.months);
     const amount = parseFloat(payForm.amount);
-    if (!payForm.year || isNaN(year) || year < 2000 || year > 2100) {
-      setPayError("Enter a valid year (e.g. 2026).");
+    if (!payForm.paymentDate) {
+      setPayError("Select a payment date.");
       return;
     }
     if (isNaN(months) || months < 1 || months > 36) {
@@ -323,9 +355,11 @@ export default function VehiclesView() {
       vehiclePlate: payTarget.plate_number,
       ownerName: payTarget.customer_name,
       ownerType: payTarget.company_id ? "company" : "individual",
+      planName: payTarget.plan,
       year,
       months,
       amountGhs: amount,
+      paidAt: new Date(payForm.paymentDate).toISOString(),
     });
     setPaidIds((prev) => new Set([...prev, payTarget.id]));
 
@@ -389,25 +423,20 @@ export default function VehiclesView() {
       {/* ── KPI cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "TOTAL VEHICLES",   value: vehicleList.length, color: "text-foreground",  trend: "+5%",  up: true  },
-          { label: "TRAKZEE ACTIVE",   value: syncedCount,        color: "text-foreground",  trend: "+2%",  up: true  },
-          { label: "DESYNCED / OFF",   value: desyncedCount,      color: "text-foreground",  trend: "-1%",  up: false },
-          { label: "EXPIRED",          value: expiredCount,       color: "text-red-500",     trend: null,   up: false },
+          { label: "TOTAL VEHICLES",   value: vehicleList.length, color: "text-foreground" },
+          { label: "TRAKZEE ACTIVE",   value: syncedCount,        color: "text-emerald-600" },
+          { label: "DESYNCED / OFF",   value: desyncedCount,      color: "text-amber-600" },
+          { label: "EXPIRED",          value: expiredCount,       color: "text-red-500" },
         ].map((s) => (
           <div key={s.label} className="bg-card border border-border rounded-xl px-5 py-4 shadow-sm">
-            <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-muted-foreground">{s.label}</p>
-            <div className="flex items-end gap-2 mt-1.5">
-              <span className={cn("text-3xl font-extrabold leading-none", s.color)}>{s.value.toLocaleString()}</span>
-              {s.trend && (
-                <span className={cn("flex items-center gap-0.5 text-xs font-semibold mb-0.5", s.up ? "text-emerald-600" : "text-orange-500")}>
-                  {s.up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                  {s.trend}
-                </span>
-              )}
+            <p className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{s.label}</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className={cn("text-2xl font-black tabular-nums", s.color)}>{s.value.toLocaleString()}</span>
             </div>
           </div>
         ))}
       </div>
+
 
       {/* ── Error ── */}
       {error && (
@@ -417,22 +446,13 @@ export default function VehiclesView() {
         </div>
       )}
 
-      {/* ── Full-width search bar ── */}
-      <div className="relative">
-        <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by plate, IMEI or owner..."
-          className="w-full pl-10 pr-4 h-11 text-sm rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
-        />
-      </div>
+
 
       {/* ── Table ── */}
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
         {/* Column headers */}
-        <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_0.8fr_0.9fr_0.9fr_0.8fr_40px] gap-3 px-6 py-3 border-b border-border bg-muted/30">
-          {["PLATE", "OWNER", "IMEI", "PLAN", "TRAKZEE", "INSTALLED", "EXPIRY / STATUS", "SMS STATUS", ""].map((col) => (
+        <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1fr_0.7fr_0.7fr_0.7fr_0.8fr_0.8fr_0.7fr_40px] gap-3 px-6 py-3 border-b border-border bg-muted/30">
+          {["PLATE", "OWNER", "IMEI", "PLAN", "TRAKZEE", "OWED", "INSTALLED", "EXPIRY / STATUS", "SMS STATUS", ""].map((col) => (
             <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
           ))}
         </div>
@@ -446,12 +466,15 @@ export default function VehiclesView() {
         ) : (
           <div className="divide-y divide-border">
             {pageVehicles.map((v) => {
-              const vStatus = computeStatus(v.expiry_date, v.status);
+              const vStatus = computeStatus(v.expiry_date, v.status, v.grace_period_days);
               const statusCfg: Record<string, string> = {
-                Active:    "bg-emerald-50 text-emerald-700 border-emerald-200",
-                "Due Soon": "bg-amber-50 text-amber-700 border-amber-200",
-                Expired:   "bg-red-50 text-red-700 border-red-200",
-                Suspended: "bg-zinc-100 text-zinc-500 border-zinc-200",
+                Active:         "bg-emerald-50 text-emerald-700 border-emerald-200",
+                "Due Soon":     "bg-amber-50 text-amber-700 border-amber-200",
+                Expired:        "bg-red-50 text-red-700 border-red-200",
+                Overdue:        "bg-red-50 text-red-700 border-red-200",
+                Suspended:      "bg-zinc-100 text-zinc-500 border-zinc-200",
+                "Grace Period": "bg-purple-50 text-purple-700 border-purple-200",
+                Removed:        "bg-gray-100 text-gray-500 border-gray-200",
               };
               const actionsMenu = (
                 <DropdownMenu>
@@ -483,7 +506,7 @@ export default function VehiclesView() {
               return (
               <div key={v.id} className="hover:bg-muted/30 transition-colors">
                 {/* Desktop row */}
-                <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_0.8fr_0.9fr_0.9fr_0.8fr_40px] gap-3 items-center px-6 py-4">
+                <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1fr_0.7fr_0.7fr_0.7fr_0.8fr_0.8fr_0.7fr_40px] gap-3 items-center px-6 py-4">
                   <span className="font-bold text-sm text-foreground">{v.plate_number}</span>
                   <div className="min-w-0">
                     <p className="font-semibold text-sm text-foreground truncate">{v.customer_name}</p>
@@ -501,12 +524,27 @@ export default function VehiclesView() {
                       {v.trakzee_status}
                     </Badge>
                   </div>
+
+                  {/* Owed column */}
+                  <div className="text-xs font-bold text-red-600 tabular-nums">
+                    {(() => {
+                        const owed = calculateOwed(v.expiry_date, v.monthly_amount, v.trakzee_status, v.updated_at);
+                        return owed > 0 ? `GH₵${owed.toFixed(2)}` : "—";
+                    })()}
+                  </div>
+
                   <span className="text-sm text-muted-foreground">
                     {v.installation_date ? new Date(v.installation_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                   </span>
                   <div>
-                    <span className="text-sm text-muted-foreground block">
-                      {new Date(v.expiry_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                    <span className={cn("text-sm block", vStatus === "Grace Period" ? "text-purple-600 font-bold" : "text-muted-foreground")}>
+                      {(() => {
+                          const date = new Date(v.expiry_date);
+                          if (vStatus === "Grace Period" && v.grace_period_days) {
+                              date.setDate(date.getDate() + v.grace_period_days);
+                          }
+                          return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+                      })()}
                     </span>
                     <Badge variant="outline" className={cn("mt-1 text-[0.65rem] font-semibold px-2 py-0", statusCfg[vStatus] ?? statusCfg.Active)}>
                       {vStatus}
@@ -710,11 +748,48 @@ export default function VehiclesView() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5 flex flex-col justify-end">
                 <Label htmlFor="reg-install-date" className="text-xs">Installation Date</Label>
-                <Input id="reg-install-date" type="date" value={form.installationDate} onChange={(e) => setForm({ ...form, installationDate: e.target.value })} />
+                <Input id="reg-install-date" type="date" value={form.installationDate} onChange={(e) => {
+                  const newDate = e.target.value;
+                  const newExpiry = addMonths(newDate || todayISO(), parseInt(form.months));
+                  setForm({ ...form, installationDate: newDate, expiryDate: newExpiry });
+                }} />
               </div>
               <div className="space-y-1.5 flex flex-col justify-end">
+                <Label className="text-xs">Months of Usage</Label>
+                <Select value={form.months} onValueChange={(val) => {
+                  const newExpiry = addMonths(form.installationDate || todayISO(), parseInt(val));
+                  setForm({ ...form, months: val, expiryDate: newExpiry });
+                }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Months" /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 36 }, (_, i) => i + 1).map((m) => (
+                      <SelectItem key={m} value={String(m)}>{m} month{m > 1 ? "s" : ""}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5 flex flex-col justify-end">
                 <Label htmlFor="reg-expiry" className="text-xs">Expiry Date</Label>
-                <Input id="reg-expiry" type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} />
+                <Input 
+                  id="reg-expiry" 
+                  type="date" 
+                  value={form.expiryDate || addMonths(form.installationDate || todayISO(), parseInt(form.months))} 
+                  onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
+                  className="focus:ring-odg-orange/30"
+                />
+              </div>
+              <div className="space-y-1.5 flex flex-col justify-end">
+                <Label className="text-xs font-semibold text-odg-orange">Total Initial Charge</Label>
+                <div className="h-9 flex items-center px-3 rounded-md border border-odg-orange/30 bg-orange-50/50 text-orange-700 font-bold text-sm">
+                  {(() => {
+                    const sp = dbPlans.find(p => p.name === form.plan);
+                    if (!sp) return "GH₵ 0.00";
+                    return `GH₵ ${(sp.price * parseInt(form.months)).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                  })()}
+                </div>
               </div>
             </div>
           </div>
@@ -753,17 +828,14 @@ export default function VehiclesView() {
               <Input value={payTarget?.plate_number ?? ""} readOnly className="bg-muted/50 cursor-default" />
             </div>
 
-            {/* Year */}
+            {/* Payment Date */}
             <div className="space-y-1.5">
-              <Label htmlFor="pay-year" className="text-xs">Year</Label>
+              <Label htmlFor="pay-date" className="text-xs">Payment Date</Label>
               <Input
-                id="pay-year"
-                type="number"
-                min={2000}
-                max={2100}
-                placeholder="2026"
-                value={payForm.year}
-                onChange={(e) => setPayForm({ ...payForm, year: e.target.value })}
+                id="pay-date"
+                type="date"
+                value={payForm.paymentDate}
+                onChange={(e) => setPayForm({ ...payForm, paymentDate: e.target.value })}
               />
             </div>
 

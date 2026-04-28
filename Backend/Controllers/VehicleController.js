@@ -9,6 +9,7 @@ const {
   deleteVehicle,
   setTrakzeeStatus,
   suspendExpired,
+  findVehicleByPlateOrImei,
 } = require('../Models/Vehicle');
 const { getAllPlans } = require('../Models/Subscription');
 
@@ -66,6 +67,22 @@ async function addVehicle(req, res) {
       return res.status(400).json({
         success: false,
         message: 'Exactly one of individual_customer_id or company_id must be provided.',
+      });
+    }
+
+    // ─── Duplicate Check ───
+    const existing = await findVehicleByPlateOrImei(plate_number, imei);
+    if (existing) {
+      if (existing.status === 'Removed') {
+        return res.status(409).json({
+          success: false,
+          message: `Vehicle with plate ${plate_number} or IMEI ${imei} was previously removed. Please restore it from the Removed Vehicles list instead of re-registering.`,
+        });
+      }
+      const conflictField = existing.plate_number === plate_number ? 'Plate Number' : 'IMEI';
+      return res.status(409).json({
+        success: false,
+        message: `A vehicle with this ${conflictField} is already registered to ${existing.customer_name}.`,
       });
     }
 

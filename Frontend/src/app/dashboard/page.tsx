@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import TopNav from "@/components/TopNav";
@@ -19,9 +19,11 @@ import RevenueChart from "@/components/RevenueChart";
 import CustomerSegments from "@/components/CustomerSegments";
 import { Card, CardContent } from "@/components/ui/card";
 import { Activity } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 const SIDEBAR_COLLAPSED_WIDTH = 68;
 const SIDEBAR_EXPANDED_WIDTH = 240;
+const RESTRICTED_SUPER_ADMIN_SECTIONS = new Set(["inventory"]);
 
 function getInitialSection() {
   if (typeof window === "undefined") {
@@ -32,20 +34,37 @@ function getInitialSection() {
   return params.get("section") ?? "dashboard";
 }
 
+function isSuperAdminRole(role?: string) {
+  const normalized = String(role ?? "").trim().toLowerCase().replace(/[_\s]+/g, " ");
+  return normalized === "super admin";
+}
+
 export default function DashboardPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [activeSection, setActiveSection] = useState(() => getInitialSection());
   const [sidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const canAccessInventory = isSuperAdminRole(user?.role);
+  const currentSection = RESTRICTED_SUPER_ADMIN_SECTIONS.has(activeSection) && !canAccessInventory ? "dashboard" : activeSection;
 
   const handleNavigate = useCallback(
     (section: string) => {
+      if (RESTRICTED_SUPER_ADMIN_SECTIONS.has(section) && !canAccessInventory) {
+        section = "dashboard";
+      }
       setActiveSection(section);
       setMobileMenuOpen(false);
       router.replace(`/dashboard?section=${section}`, { scroll: false });
     },
-    [router]
+    [canAccessInventory, router]
   );
+
+  useEffect(() => {
+    if (RESTRICTED_SUPER_ADMIN_SECTIONS.has(activeSection) && !canAccessInventory) {
+      router.replace("/dashboard?section=dashboard", { scroll: false });
+    }
+  }, [activeSection, canAccessInventory, router]);
 
   const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
   const now = new Date();
@@ -53,7 +72,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar
-        activeSection={activeSection}
+        activeSection={currentSection}
         onNavigate={handleNavigate}
         mobileOpen={mobileMenuOpen}
         onMobileClose={() => setMobileMenuOpen(false)}
@@ -70,7 +89,7 @@ export default function DashboardPage() {
         />
 
         <main className="flex-1 px-3 pb-3 pt-20 sm:px-6 sm:pb-6 sm:pt-20 space-y-6">
-          {activeSection === "dashboard" && (
+          {currentSection === "dashboard" && (
             <div className="space-y-6">
               <Card className="border border-border shadow-sm overflow-hidden">
                 <CardContent className="p-6">
@@ -94,14 +113,14 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeSection === "customers" && <CustomersView />}
-          {activeSection === "vehicles" && <VehiclesView />}
-          {activeSection === "subscriptions" && <SubscriptionsView />}
-          {activeSection === "removed" && <RemovedView />}
-          {activeSection === "payment-history" && <PaymentHistoryView />}
-          {activeSection === "inventory" && <InventoryView />}
+          {currentSection === "customers" && <CustomersView />}
+          {currentSection === "vehicles" && <VehiclesView onNavigate={handleNavigate} />}
+          {currentSection === "subscriptions" && <SubscriptionsView />}
+          {currentSection === "removed" && <RemovedView />}
+          {currentSection === "payment-history" && <PaymentHistoryView />}
+          {currentSection === "inventory" && canAccessInventory && <InventoryView />}
 
-          {activeSection === "bulk-import" && (
+          {currentSection === "bulk-import" && (
             <div className="space-y-5">
               <div>
                 <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
@@ -115,8 +134,8 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeSection === "profile" && <ProfileView />}
-          {activeSection === "settings" && <SettingsView />}
+          {currentSection === "profile" && <ProfileView />}
+          {currentSection === "settings" && <SettingsView />}
         </main>
 
         <footer className="border-t border-border px-6 py-3 flex items-center justify-between text-xs text-muted-foreground">

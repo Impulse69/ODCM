@@ -7,6 +7,15 @@ if (!process.env.JWT_SECRET) {
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+function normalizeRole(role) {
+  return String(role ?? '').trim().toLowerCase().replace(/[_\s]+/g, ' ');
+}
+
+function isSuperAdminRole(role) {
+  const normalized = normalizeRole(role);
+  return normalized === 'super admin';
+}
+
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -24,4 +33,16 @@ function authenticateToken(req, res, next) {
   }
 }
 
-module.exports = { authenticateToken };
+function requireSuperAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+
+  if (!isSuperAdminRole(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Only super admin users can access inventory.' });
+  }
+
+  next();
+}
+
+module.exports = { authenticateToken, requireSuperAdmin, isSuperAdminRole };

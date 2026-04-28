@@ -53,12 +53,23 @@ async function getIndividual(req, res) {
 // POST /api/customers/individuals
 async function addIndividual(req, res) {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, contact_person, email, address, city, postal_code } = req.body;
     if (!name || !phone) {
       return res.status(400).json({ success: false, message: 'name and phone are required.' });
     }
+    const customerModel = require('../Models/Customer');
+    // Duplicate check for phone
+    const existingPhone = await customerModel.findIndividualByPhone(phone);
+    if (existingPhone) {
+      return res.status(409).json({ success: false, message: 'An individual with this phone already exists.' });
+    }
+    // Duplicate check for name
+    const existingName = await customerModel.findIndividualByName(name);
+    if (existingName) {
+      return res.status(409).json({ success: false, message: 'An individual with this name already exists.' });
+    }
     const id = generateId('CUST', name);
-    const customer = await createIndividual({ id, name, phone });
+    const customer = await createIndividual({ id, name, phone, contact_person, email, address, city, postal_code });
     res.status(201).json({ success: true, data: customer });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -112,12 +123,18 @@ async function getCompany(req, res) {
 // POST /api/customers/companies
 async function addCompany(req, res) {
   try {
-    const { company_name, billing_contact_name, contact_phone, email, address, tax_id, status, total_accounts } = req.body;
+    const { company_name, billing_contact_name, contact_phone, email, address, city, postal_code, tax_id, status, total_accounts } = req.body;
     if (!company_name) {
       return res.status(400).json({ success: false, message: 'company_name is required.' });
     }
+    const customerModel = require('../Models/Customer');
+    // Duplicate check for company_name only
+    const existingName = await customerModel.findCompanyByName(company_name);
+    if (existingName) {
+      return res.status(409).json({ success: false, message: 'A company with this name already exists.' });
+    }
     const id = generateId('CO', company_name);
-    const company = await createCompany({ id, company_name, billing_contact_name, contact_phone, email, address, tax_id, status, total_accounts });
+    const company = await createCompany({ id, company_name, billing_contact_name, contact_phone, email, address, city, postal_code, tax_id, status, total_accounts });
     res.status(201).json({ success: true, data: company });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

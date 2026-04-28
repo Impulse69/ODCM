@@ -16,7 +16,7 @@ const bulkImportRouter      = require('./Routers/bulkImportRouter');
 const authRouter            = require('./Routers/authRouter');
 const smsRouter             = require('./Routers/smsRouter');
 const inventoryRouter       = require('./Routers/inventoryRouter');
-const { authenticateToken } = require('./middleware/authMiddleware');
+const { authenticateToken, requireSuperAdmin } = require('./middleware/authMiddleware');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,7 +32,7 @@ app.use('/api/plans',         authenticateToken, subscriptionRouter);
 app.use('/api/payments',      authenticateToken, paymentHistoryRouter);
 app.use('/api/bulk-import',   authenticateToken, bulkImportRouter);
 app.use('/api/sms',           authenticateToken, smsRouter);
-app.use('/api/inventory',     authenticateToken, inventoryRouter);
+app.use('/api/inventory',     authenticateToken, requireSuperAdmin, inventoryRouter);
 
 // Test route to check DB connection
 app.get('/api/test-db', async (req, res) => {

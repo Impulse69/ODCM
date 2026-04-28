@@ -234,7 +234,7 @@ export default function TopNav({
                   {user?.name?.split(" ")[0] || "Admin"}
                 </div>
                 <div className="text-[0.6rem] text-muted-foreground leading-tight">
-                  {user?.role || "ODG Master"}
+                  {user?.role || "Admin"}
                 </div>
               </div>
               <ChevronDown size={12} className="text-muted-foreground" />

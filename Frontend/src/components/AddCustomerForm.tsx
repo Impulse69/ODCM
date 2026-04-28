@@ -44,7 +44,15 @@ export default function AddCustomerForm({ onCreated }: { onCreated?: () => void 
     setSubmitting(true)
     setApiError(null)
     try {
-      await createIndividual({ name: values.clientName, phone: values.telephone })
+      await createIndividual({
+        name: values.clientName,
+        phone: values.telephone,
+        contact_person: values.contactPerson || undefined,
+        email: values.email || undefined,
+        address: values.address || undefined,
+        city: values.city || undefined,
+        postal_code: values.postalCode || undefined,
+      })
       form.reset()
       onCreated?.()
     } catch (err) {

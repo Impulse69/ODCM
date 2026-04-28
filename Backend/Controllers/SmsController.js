@@ -1,7 +1,7 @@
-const https        = require('https');
-const nodemailer   = require('nodemailer');
-const PDFDocument  = require('pdfkit');
-const pool         = require('../Config/db');
+const https = require('https');
+const nodemailer = require('nodemailer');
+const PDFDocument = require('pdfkit');
+const pool = require('../Config/db');
 
 // ─── Hubtel SMS Helper ────────────────────────────────────────────────────────
 
@@ -32,14 +32,14 @@ function sendHubtelSms({ clientId, clientSecret, senderId, to, message }) {
       httpRes.on('end', () => {
         console.log(`[SMS] Hubtel HTTP ${httpRes.statusCode} → ${data.slice(0, 300)}`);
         try {
-          const parsed   = JSON.parse(data);
+          const parsed = JSON.parse(data);
           // Hubtel v1 success: status === 0 (top-level integer)
           const apiStatus = Number(parsed.Status ?? parsed.status ?? -1);
-          const httpOk    = httpRes.statusCode >= 200 && httpRes.statusCode < 300;
+          const httpOk = httpRes.statusCode >= 200 && httpRes.statusCode < 300;
           // messageId can be nested (Data.MessageId / data.messageId) or top-level
-          const msgData   = parsed.Data || parsed.data || {};
-          const hasId     = !!(msgData.MessageId || msgData.messageId ||
-                               parsed.messageId  || parsed.MessageId);
+          const msgData = parsed.Data || parsed.data || {};
+          const hasId = !!(msgData.MessageId || msgData.messageId ||
+            parsed.messageId || parsed.MessageId);
           // Accept if: explicit success code (0) OR HTTP 2xx with a message ID
           if (apiStatus === 0 || (httpOk && hasId)) {
             resolve({ success: true });
@@ -80,7 +80,7 @@ async function sendAdminEmail({ cfg, expiredList }) {
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0">${v.customer_name}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0">${v.phone || '-'}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-family:monospace">${v.plate_number}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0">${new Date(v.expiry_date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0">${new Date(v.expiry_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#e53e3e;font-weight:600">${amount}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:${v.sms_sent ? '#2f855a' : '#c53030'}">${v.sms_sent ? '\u2713 Sent' : '\u2715 Failed'}</td>
     </tr>`;
@@ -91,7 +91,7 @@ async function sendAdminEmail({ cfg, expiredList }) {
   const html = `
 <!DOCTYPE html><html><body style="font-family:sans-serif;color:#1a202c;max-width:680px;margin:0 auto;padding:24px">
   <h2 style="color:#c53030;margin-bottom:4px">\u26A0\uFE0F Expired Vehicles — Action Required</h2>
-  <p style="color:#718096;margin-top:0">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</p>
+  <p style="color:#718096;margin-top:0">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</p>
   <p>The following <strong>${expiredList.length}</strong> vehicle${expiredList.length !== 1 ? 's have' : ' has'} expired and been moved to the Removed list.
      Expiry SMS notification${expiredList.length !== 1 ? 's have' : ' has'} been sent to the customers.</p>
   <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1)">
@@ -112,8 +112,8 @@ async function sendAdminEmail({ cfg, expiredList }) {
 </body></html>`;
 
   await transporter.sendMail({
-    from:    `"ODCM System" <${cfg.smtp_user}>`,
-    to:      cfg.admin_email,
+    from: `"ODCM System" <${cfg.smtp_user}>`,
+    to: cfg.admin_email,
     subject: `[ODCM] ${expiredList.length} expired vehicle${expiredList.length !== 1 ? 's' : ''} — ${new Date().toLocaleDateString('en-GB')}`,
     html,
   });
@@ -230,7 +230,7 @@ function buildWeeklySummaryEmailHtml(weeklyExpired, now, options = {}) {
         <td style="padding:10px 12px;border-bottom:1px solid #eef2f7">${v.customer_name || '-'}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eef2f7">${v.phone || '-'}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;font-family:Consolas,monospace">${v.plate_number || '-'}</td>
-        <td style="padding:10px 12px;border-bottom:1px solid #eef2f7">${new Date(v.expiry_date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #eef2f7">${new Date(v.expiry_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;color:#b91c1c;font-weight:700">${formatMoney(v.monthly_amount)}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eef2f7;color:#15803d;font-weight:600">Sent</td>
       </tr>`).join('')
@@ -267,8 +267,8 @@ function buildWeeklySummaryEmailHtml(weeklyExpired, now, options = {}) {
       </div>
       <p style="margin:12px 0 0 0;color:#475569;font-size:13px">
         ${isTest
-          ? 'This is a test preview of the weekly bundle email and attached PDF report.'
-          : 'This bundle includes vehicles that expired this week and had expiry SMS sent successfully.'}
+      ? 'This is a test preview of the weekly bundle email and attached PDF report.'
+      : 'This bundle includes vehicles that expired this week and had expiry SMS sent successfully.'}
       </p>
     </div>
 
@@ -314,11 +314,11 @@ function buildWeeklySummaryPdfBuffer(weeklyExpired, now) {
     const pageBottom = doc.page.height - 40;
     const columns = [
       { key: 'customer_name', label: 'Customer', width: 155, align: 'left' },
-      { key: 'phone',         label: 'Phone',    width: 65,  align: 'left' },
-      { key: 'plate_number',  label: 'Plate',    width: 70,  align: 'left' },
-      { key: 'expiry_date',   label: 'Expired',  width: 70,  align: 'left' },
-      { key: 'amount',        label: 'Amount',   width: 90,  align: 'right' },
-      { key: 'sms',           label: 'SMS',      width: 65,  align: 'center' },
+      { key: 'phone', label: 'Phone', width: 65, align: 'left' },
+      { key: 'plate_number', label: 'Plate', width: 70, align: 'left' },
+      { key: 'expiry_date', label: 'Expired', width: 70, align: 'left' },
+      { key: 'amount', label: 'Amount', width: 90, align: 'right' },
+      { key: 'sms', label: 'SMS', width: 65, align: 'center' },
     ];
 
     const drawTop = () => {
@@ -465,23 +465,23 @@ async function getConfig(req, res) {
     res.json({
       success: true,
       data: {
-        clientId:           cfg.client_id    || '',
-        clientSecretSet:    !!cfg.client_secret,
-        senderId:           cfg.sender_id    || 'ODG',
-        dueSoonEnabled:     cfg.due_soon_enabled  === 'true',
-        expiredEnabled:     cfg.expired_enabled   === 'true',
-        dueSoonTemplate:    cfg.due_soon_template ||
+        clientId: cfg.client_id || '',
+        clientSecretSet: !!cfg.client_secret,
+        senderId: cfg.sender_id || 'ODG',
+        dueSoonEnabled: cfg.due_soon_enabled === 'true',
+        expiredEnabled: cfg.expired_enabled === 'true',
+        dueSoonTemplate: cfg.due_soon_template ||
           'Dear {customerName}, your vehicle ({vehiclePlate}) subscription expires in {daysLeft} day(s). Please renew to avoid deactivation. - ODG',
-        expiredTemplate:    cfg.expired_template ||
+        expiredTemplate: cfg.expired_template ||
           'Dear {customerName}, your vehicle ({vehiclePlate}) subscription has expired. Please contact us immediately to renew. - ODG',
-        firstReminderDays:  parseInt(cfg.first_reminder_days  || '14'),
+        firstReminderDays: parseInt(cfg.first_reminder_days || '14'),
         secondReminderDays: parseInt(cfg.second_reminder_days || '7'),
-        thirdReminderDays:  parseInt(cfg.third_reminder_days  || '3'),
-        adminEmail:         cfg.admin_email   || '',
-        smtpHost:           cfg.smtp_host     || '',
-        smtpPort:           cfg.smtp_port     || '587',
-        smtpUser:           cfg.smtp_user     || '',
-        smtpPassSet:        !!cfg.smtp_pass,
+        thirdReminderDays: parseInt(cfg.third_reminder_days || '3'),
+        adminEmail: cfg.admin_email || '',
+        smtpHost: cfg.smtp_host || '',
+        smtpPort: cfg.smtp_port || '587',
+        smtpUser: cfg.smtp_user || '',
+        smtpPassSet: !!cfg.smtp_pass,
       },
     });
   } catch (err) {
@@ -500,16 +500,16 @@ async function saveConfig(req, res) {
       firstReminderDays, secondReminderDays, thirdReminderDays,
     } = req.body;
 
-    if (clientId          !== undefined) await upsertSetting('client_id',           clientId);
-    if (clientSecret      !== undefined && clientSecret !== '') await upsertSetting('client_secret', clientSecret);
-    if (senderId          !== undefined) await upsertSetting('sender_id',           senderId);
-    if (dueSoonEnabled    !== undefined) await upsertSetting('due_soon_enabled',    String(dueSoonEnabled));
-    if (expiredEnabled    !== undefined) await upsertSetting('expired_enabled',     String(expiredEnabled));
-    if (dueSoonTemplate   !== undefined) await upsertSetting('due_soon_template',   dueSoonTemplate);
-    if (expiredTemplate   !== undefined) await upsertSetting('expired_template',    expiredTemplate);
-    if (firstReminderDays  !== undefined) await upsertSetting('first_reminder_days',  String(firstReminderDays));
+    if (clientId !== undefined) await upsertSetting('client_id', clientId);
+    if (clientSecret !== undefined && clientSecret !== '') await upsertSetting('client_secret', clientSecret);
+    if (senderId !== undefined) await upsertSetting('sender_id', senderId);
+    if (dueSoonEnabled !== undefined) await upsertSetting('due_soon_enabled', String(dueSoonEnabled));
+    if (expiredEnabled !== undefined) await upsertSetting('expired_enabled', String(expiredEnabled));
+    if (dueSoonTemplate !== undefined) await upsertSetting('due_soon_template', dueSoonTemplate);
+    if (expiredTemplate !== undefined) await upsertSetting('expired_template', expiredTemplate);
+    if (firstReminderDays !== undefined) await upsertSetting('first_reminder_days', String(firstReminderDays));
     if (secondReminderDays !== undefined) await upsertSetting('second_reminder_days', String(secondReminderDays));
-    if (thirdReminderDays  !== undefined) await upsertSetting('third_reminder_days',  String(thirdReminderDays));
+    if (thirdReminderDays !== undefined) await upsertSetting('third_reminder_days', String(thirdReminderDays));
 
     const { adminEmail, smtpHost, smtpPort, smtpUser, smtpPass } = req.body;
     const trimmedAdminEmail = adminEmail === undefined ? undefined : String(adminEmail).trim();
@@ -537,10 +537,10 @@ async function saveConfig(req, res) {
     }
 
     if (trimmedAdminEmail !== undefined) await upsertSetting('admin_email', trimmedAdminEmail);
-    if (trimmedSmtpHost   !== undefined) await upsertSetting('smtp_host', trimmedSmtpHost);
-    if (smtpPort          !== undefined) await upsertSetting('smtp_port', String(smtpPort).trim());
-    if (trimmedSmtpUser   !== undefined) await upsertSetting('smtp_user', trimmedSmtpUser);
-    if (trimmedSmtpPass   !== undefined && trimmedSmtpPass !== '') await upsertSetting('smtp_pass', trimmedSmtpPass);
+    if (trimmedSmtpHost !== undefined) await upsertSetting('smtp_host', trimmedSmtpHost);
+    if (smtpPort !== undefined) await upsertSetting('smtp_port', String(smtpPort).trim());
+    if (trimmedSmtpUser !== undefined) await upsertSetting('smtp_user', trimmedSmtpUser);
+    if (trimmedSmtpPass !== undefined && trimmedSmtpPass !== '') await upsertSetting('smtp_pass', trimmedSmtpPass);
 
     res.json({ success: true });
   } catch (err) {
@@ -561,9 +561,9 @@ async function testSms(req, res) {
     }
 
     const result = await sendHubtelSms({
-      clientId:     cfg.client_id,
+      clientId: cfg.client_id,
       clientSecret: cfg.client_secret,
-      senderId:     cfg.sender_id || 'ODG',
+      senderId: cfg.sender_id || 'ODG',
       to,
       message: 'This is a test SMS from ODCM. Your Hubtel configuration is working correctly.',
     });
@@ -611,7 +611,7 @@ async function testEmail(req, res) {
 
     const accepted = Array.isArray(info.accepted) ? info.accepted : [];
     const rejected = Array.isArray(info.rejected) ? info.rejected : [];
-    const pending  = Array.isArray(info.pending) ? info.pending : [];
+    const pending = Array.isArray(info.pending) ? info.pending : [];
 
     if (accepted.length === 0) {
       return res.status(502).json({
@@ -671,14 +671,14 @@ async function sendSmsForVehicle(req, res) {
       return res.status(400).json({ success: false, message: 'Hubtel credentials not configured.' });
     }
 
-    const today  = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     const expiry = new Date(vehicle.expiry_date); expiry.setHours(0, 0, 0, 0);
     const daysLeft = Math.round((expiry - today) / 86400000);
 
     const smsType = daysLeft <= 0 ? 'expired' : 'due_soon';
     const template =
       smsType === 'expired'
-        ? (cfg.expired_template  || 'Dear {customerName}, your vehicle ({vehiclePlate}) subscription has expired. Please contact us to renew. - ODG')
+        ? (cfg.expired_template || 'Dear {customerName}, your vehicle ({vehiclePlate}) subscription has expired. Please contact us to renew. - ODG')
         : (cfg.due_soon_template || 'Dear {customerName}, your vehicle ({vehiclePlate}) subscription expires in {daysLeft} day(s). Please renew to avoid deactivation. - ODG');
 
     const message = interpolate(template, {
@@ -688,10 +688,10 @@ async function sendSmsForVehicle(req, res) {
     });
 
     const result = await sendHubtelSms({
-      clientId:     cfg.client_id,
+      clientId: cfg.client_id,
       clientSecret: cfg.client_secret,
-      senderId:     cfg.sender_id || 'ODG',
-      to:           vehicle.phone,
+      senderId: cfg.sender_id || 'ODG',
+      to: vehicle.phone,
       message,
     });
 
@@ -717,11 +717,11 @@ async function executeSmsJob() {
     return { sent: 0, failed: 0, skipped: 0, removed: 0 };
   }
 
-  const firstDays      = parseInt(cfg.first_reminder_days  || '14');
-  const secondDays     = parseInt(cfg.second_reminder_days || '7');
-  const thirdDays      = parseInt(cfg.third_reminder_days  || '3');
+  const firstDays = parseInt(cfg.first_reminder_days || '14');
+  const secondDays = parseInt(cfg.second_reminder_days || '7');
+  const thirdDays = parseInt(cfg.third_reminder_days || '3');
   const dueSoonEnabled = cfg.due_soon_enabled === 'true';
-  const expiredEnabled = cfg.expired_enabled  === 'true';
+  const expiredEnabled = cfg.expired_enabled === 'true';
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
@@ -736,12 +736,12 @@ async function executeSmsJob() {
      WHERE s.status != 'Removed'`,
   );
 
-  const results    = { sent: 0, failed: 0, skipped: 0, removed: 0 };
+  const results = { sent: 0, failed: 0, skipped: 0, removed: 0 };
 
   for (const v of vehicles) {
     if (!v.phone) { results.skipped++; continue; }
 
-    const expiry   = new Date(v.expiry_date); expiry.setHours(0, 0, 0, 0);
+    const expiry = new Date(v.expiry_date); expiry.setHours(0, 0, 0, 0);
     const daysLeft = Math.round((expiry - today) / 86400000);
 
     if (daysLeft <= 0) {
@@ -758,10 +758,10 @@ async function executeSmsJob() {
           daysLeft: 0,
         });
         const result = await sendHubtelSms({
-          clientId:     cfg.client_id,
+          clientId: cfg.client_id,
           clientSecret: cfg.client_secret,
-          senderId:     cfg.sender_id || 'ODG',
-          to:           v.phone,
+          senderId: cfg.sender_id || 'ODG',
+          to: v.phone,
           message,
         });
         const newStatus = result.success ? 'Sent' : 'Failed';
@@ -781,10 +781,10 @@ async function executeSmsJob() {
         }
       }
 
-      // Always soft-delete expired vehicles regardless of SMS outcome
+      // Move to Removed status immediately upon expiry
       await pool.query(
         `UPDATE subscriptions
-         SET status = 'Removed', trakzee_status = 'Deactivated', updated_at = NOW()
+         SET status = 'Removed', updated_at = NOW()
          WHERE id = $1`,
         [v.id],
       );
@@ -828,10 +828,10 @@ async function executeSmsJob() {
     });
 
     const result = await sendHubtelSms({
-      clientId:     cfg.client_id,
+      clientId: cfg.client_id,
       clientSecret: cfg.client_secret,
-      senderId:     cfg.sender_id || 'ODG',
-      to:           v.phone,
+      senderId: cfg.sender_id || 'ODG',
+      to: v.phone,
       message,
     });
 

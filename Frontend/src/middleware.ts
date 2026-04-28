@@ -20,8 +20,8 @@ export function middleware(request: NextRequest) {
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   const isProtected = PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-  if (isRoot && token) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (isRoot) {
+    return NextResponse.redirect(new URL(token ? "/dashboard" : "/login", request.url));
   }
 
   // Authenticated user trying to access login/signup → redirect to dashboard
@@ -31,7 +31,7 @@ export function middleware(request: NextRequest) {
 
   // Unauthenticated user trying to access the dashboard → redirect to login
   if (isProtected && !token) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();

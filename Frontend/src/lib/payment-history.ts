@@ -12,6 +12,7 @@ export interface PaymentRecord {
     vehiclePlate: string;
     ownerName: string;
     ownerType: "individual" | "company";
+    planName?: string;
     year: number;
     months: number;
     amountGhs: number;
@@ -46,11 +47,11 @@ export async function getPayments(vehicleId?: string): Promise<PaymentRecord[]> 
 }
 
 // Save a payment — persists to DB + localStorage, fires the notification event
-export async function savePayment(record: Omit<PaymentRecord, "id" | "paidAt">): Promise<PaymentRecord> {
+export async function savePayment(record: Omit<PaymentRecord, "id">): Promise<PaymentRecord> {
     const entry: PaymentRecord = {
         ...record,
         id: `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
-        paidAt: new Date().toISOString(),
+        paidAt: record.paidAt || new Date().toISOString(),
     };
 
     // 1. Persist to backend (non-blocking — best effort)
@@ -67,9 +68,11 @@ export async function savePayment(record: Omit<PaymentRecord, "id" | "paidAt">):
             vehicle_plate: entry.vehiclePlate,
             owner_name:    entry.ownerName,
             owner_type:    entry.ownerType,
+            plan_name:     entry.planName,
             year:          entry.year,
             months:        entry.months,
             amount_ghs:    entry.amountGhs,
+            paid_at:       entry.paidAt,
         }),
     }).catch(() => { /* ignore network errors */ });
 
@@ -114,6 +117,7 @@ function rowToRecord(row: any): PaymentRecord {
         vehiclePlate: row.vehicle_plate,
         ownerName:    row.owner_name,
         ownerType:    row.owner_type,
+        planName:     row.plan_name ?? undefined,
         year:         row.year,
         months:       row.months,
         amountGhs:    parseFloat(row.amount_ghs),
