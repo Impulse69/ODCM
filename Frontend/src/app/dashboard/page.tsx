@@ -13,6 +13,8 @@ import SubscriptionsView from "@/components/SubscriptionsView";
 import RemovedView from "@/components/RemovedView";
 import PaymentHistoryView from "@/components/PaymentHistoryView";
 import InventoryView from "@/components/InventoryView";
+import UsersView from "@/components/UsersView";
+import LogsView from "@/components/LogsView";
 import ProfileView from "@/components/ProfileView";
 import SettingsView from "@/components/SettingsView";
 import RevenueChart from "@/components/RevenueChart";
@@ -23,7 +25,7 @@ import { useAuth } from "@/lib/auth-context";
 
 const SIDEBAR_COLLAPSED_WIDTH = 68;
 const SIDEBAR_EXPANDED_WIDTH = 240;
-const RESTRICTED_SUPER_ADMIN_SECTIONS = new Set(["inventory"]);
+const RESTRICTED_SUPER_ADMIN_SECTIONS = new Set(["users", "logs"]);
 
 function getInitialSection() {
   if (typeof window === "undefined") {
@@ -45,26 +47,26 @@ export default function DashboardPage() {
   const [activeSection, setActiveSection] = useState(() => getInitialSection());
   const [sidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const canAccessInventory = isSuperAdminRole(user?.role);
-  const currentSection = RESTRICTED_SUPER_ADMIN_SECTIONS.has(activeSection) && !canAccessInventory ? "dashboard" : activeSection;
+  const canAccessSuperAdminSections = isSuperAdminRole(user?.role);
+  const currentSection = RESTRICTED_SUPER_ADMIN_SECTIONS.has(activeSection) && !canAccessSuperAdminSections ? "dashboard" : activeSection;
 
   const handleNavigate = useCallback(
     (section: string) => {
-      if (RESTRICTED_SUPER_ADMIN_SECTIONS.has(section) && !canAccessInventory) {
+      if (RESTRICTED_SUPER_ADMIN_SECTIONS.has(section) && !canAccessSuperAdminSections) {
         section = "dashboard";
       }
       setActiveSection(section);
       setMobileMenuOpen(false);
       router.replace(`/dashboard?section=${section}`, { scroll: false });
     },
-    [canAccessInventory, router]
+    [canAccessSuperAdminSections, router]
   );
 
   useEffect(() => {
-    if (RESTRICTED_SUPER_ADMIN_SECTIONS.has(activeSection) && !canAccessInventory) {
+    if (RESTRICTED_SUPER_ADMIN_SECTIONS.has(activeSection) && !canAccessSuperAdminSections) {
       router.replace("/dashboard?section=dashboard", { scroll: false });
     }
-  }, [activeSection, canAccessInventory, router]);
+  }, [activeSection, canAccessSuperAdminSections, router]);
 
   const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
   const now = new Date();
@@ -114,11 +116,13 @@ export default function DashboardPage() {
           )}
 
           {currentSection === "customers" && <CustomersView />}
-          {currentSection === "vehicles" && <VehiclesView onNavigate={handleNavigate} />}
+          {currentSection === "vehicles" && <VehiclesView />}
           {currentSection === "subscriptions" && <SubscriptionsView />}
           {currentSection === "removed" && <RemovedView />}
           {currentSection === "payment-history" && <PaymentHistoryView />}
-          {currentSection === "inventory" && canAccessInventory && <InventoryView />}
+          {currentSection === "inventory" && <InventoryView />}
+          {currentSection === "users" && canAccessSuperAdminSections && <UsersView />}
+          {currentSection === "logs" && canAccessSuperAdminSections && <LogsView />}
 
           {currentSection === "bulk-import" && (
             <div className="space-y-5">

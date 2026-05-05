@@ -11,17 +11,14 @@ import {
   Loader2,
   AlertCircle,
   Plus,
-  Car,
-  Trash2,
-  Edit,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
-  TrendingDown,
   CreditCard,
   MessageSquare,
-  ArrowRight,
-  AlertTriangle,
+  Car,
+  MapPin,
+  Pencil,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,9 +50,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { getVehicles, addVehicle, updateTrakzee, updateVehicleExpiry, deleteVehicle, type Vehicle } from "@/lib/vehicles-api";
+import { getVehicles, addVehicle, updateVehicle, updateTrakzee, updateVehicleExpiry, deleteVehicle, type Vehicle } from "@/lib/vehicles-api";
 import { sendVehicleSms } from "@/lib/sms-api";
 import { getIndividuals, getCompanies, type IndividualCustomer, type Company } from "@/lib/customers-api";
+import {
+  getInventoryItems,
+  getInventoryTypesByCategory,
+  type InventoryItem,
+  type InventoryType,
+} from "@/lib/inventory-api";
 import { savePayment } from "@/lib/payment-history";
 import { getPlans, type Plan } from "@/lib/plans-api";
 import { cn } from "@/lib/utils";
@@ -95,23 +98,34 @@ const emptyForm = {
   ownerName: "",
   ownerType: "" as "" | "individual" | "company",
   phone: "",
+  trackerCategory: "Tracker",
+  trackerType: "",
+  inventoryId: null as number | null,
   imei: "",
+  simInventoryId: null as number | null,
+  simImei: "",
+  simNumber: "",
   plan: "",
   trakzeeStatus: "Active" as "Active" | "Deactivated",
   installationDate: todayISO(),
+  installationLocation: "",
   months: "1",
   expiryDate: addMonths(todayISO(), 1),
 };
 
-export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) => void }) {
+export default function VehiclesView() {
   const [search, setSearch] = useState("");
   const [vehicleList, setVehicleList] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+
+  // Vehicle Details View
+  const [viewVehicle, setViewVehicle] = useState<Vehicle | null>(null);
 
   // Subscription plans from DB
   const [dbPlans, setDbPlans] = useState<Plan[]>([]);
@@ -120,6 +134,13 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
   const [owners, setOwners] = useState<OwnerOption[]>([]);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [trackerDropdownOpen, setTrackerDropdownOpen] = useState(false);
+  const [trackerSearch, setTrackerSearch] = useState("");
+  const [simDropdownOpen, setSimDropdownOpen] = useState(false);
+  const [simSearch, setSimSearch] = useState("");
+  const [trackerTypes, setTrackerTypes] = useState<InventoryType[]>([]);
+  const [trackerItems, setTrackerItems] = useState<InventoryItem[]>([]);
+  const [allInventoryItems, setAllInventoryItems] = useState<InventoryItem[]>([]);
 
   // ── Fetch vehicles ──────────────────────────────────────────────────────────
   const fetchVehicles = useCallback(async () => {
@@ -159,14 +180,24 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
     }
   }, []);
 
+  const fetchInventorySeed = useCallback(async () => {
+    try {
+      const items = await getInventoryItems();
+      setAllInventoryItems(items);
+    } catch {
+      // non-critical until the register form is opened
+    }
+  }, []);
+
   useEffect(() => {
     fetchVehicles();
     fetchOwners();
+    fetchInventorySeed();
     getPlans().then(p => setDbPlans(p.filter(pl => pl.is_active))).catch(() => {});
     // Auto-refresh every 60 s so vehicles moved to Removed by the scheduler disappear
     const timer = setInterval(silentRefetch, 60000);
     return () => clearInterval(timer);
-  }, [fetchVehicles, fetchOwners, silentRefetch]);
+  }, [fetchVehicles, fetchOwners, fetchInventorySeed, silentRefetch]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const vehicles = useMemo(
@@ -178,7 +209,10 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
           s.imei.includes(search) ||
           s.customer_name.toLowerCase().includes(search.toLowerCase());
 
-        return matchesSearch;
+        const vStatus = computeStatus(s.expiry_date, s.status, s.grace_period_days);
+        const isRemovedOrExpired = vStatus === "Removed" || vStatus === "Expired" || vStatus === "Suspended" || s.status === "Removed";
+
+        return matchesSearch && !isRemovedOrExpired;
       }),
     [search, vehicleList],
   );
@@ -193,11 +227,46 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
     [owners, customerSearch],
   );
 
+  const filteredTrackerItems = useMemo(
+    () =>
+      trackerItems.filter(
+        (item) =>
+          item.imei_number.toLowerCase().includes(trackerSearch.toLowerCase()) ||
+          item.type.toLowerCase().includes(trackerSearch.toLowerCase()) ||
+          item.category.toLowerCase().includes(trackerSearch.toLowerCase()),
+      ),
+    [trackerItems, trackerSearch],
+  );
+
+  const simInventoryItems = useMemo(
+    () =>
+      allInventoryItems.filter((item) => {
+        const text = `${item.category} ${item.type}`.toLowerCase();
+        return text.includes("sim");
+      }),
+    [allInventoryItems],
+  );
+
+  const filteredSimItems = useMemo(
+    () =>
+      simInventoryItems.filter(
+        (item) =>
+          item.imei_number.toLowerCase().includes(simSearch.toLowerCase()) ||
+          item.type.toLowerCase().includes(simSearch.toLowerCase()) ||
+          item.category.toLowerCase().includes(simSearch.toLowerCase()),
+      ),
+    [simInventoryItems, simSearch],
+  );
+
   const syncedCount   = vehicleList.filter((s) => s.trakzee_status === "Active").length;
   const desyncedCount = vehicleList.filter((s) => s.trakzee_status === "Deactivated").length;
-   const expiredCount  = vehicleList.filter((s) => {
-    const status = computeStatus(s.expiry_date, s.status);
-    return status === "Removed" || status === "Expired" || status === "Suspended" || s.status === "Removed";
+  const expiredCount  = vehicleList.filter((s) => {
+    const status = computeStatus(s.expiry_date, s.status, s.grace_period_days);
+    return (status === "Expired" || status === "Suspended" || status === "Overdue" || status === "Grace Period") && s.status !== "Removed";
+  }).length;
+  const removedCount = vehicleList.filter((s) => {
+    const status = computeStatus(s.expiry_date, s.status, s.grace_period_days);
+    return status === "Removed" || s.status === "Removed";
   }).length;
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -206,51 +275,120 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
       ...emptyForm,
       plan: dbPlans.length > 0 ? dbPlans[0].name : "",
     });
+    setEditingVehicleId(null);
+    setTrackerTypes([]);
+    setTrackerItems([]);
     setCustomerSearch("");
+    setTrackerSearch("");
+    setSimSearch("");
+    setSaveError(null);
+    setShowForm(true);
+  };
+
+  const handleOpenEdit = (v: Vehicle) => {
+    const ownerType = v.company_id ? "company" : "individual";
+    const ownerId = v.company_id || v.individual_customer_id || "";
+    
+    setForm({
+      ownerId,
+      ownerType,
+      ownerName: v.customer_name,
+      phone: v.phone || "",
+      plateNumber: v.plate_number,
+      trackerCategory: "TRACKER", // Default guess
+      trackerType: "", 
+      inventoryId: null, // We don't change inventory items during basic edit
+      imei: v.imei,
+      simInventoryId: null,
+      simImei: v.sim_imei || "",
+      simNumber: v.sim_number || "",
+      plan: v.plan,
+      trakzeeStatus: v.trakzee_status,
+      installationDate: v.installation_date ? toDateStr(v.installation_date) : todayISO(),
+      installationLocation: v.installation_location || "",
+      months: "0", // No new payment by default
+      expiryDate: toDateStr(v.expiry_date),
+    });
+    setEditingVehicleId(v.id);
     setSaveError(null);
     setShowForm(true);
   };
 
   const handleSave = async () => {
     if (
-      !form.plateNumber || !form.ownerId || !form.imei ||
-      !form.plan || !form.trakzeeStatus || !form.installationDate || !form.expiryDate
+      !form.plateNumber || !form.ownerId || 
+      !form.plan || !form.trakzeeStatus || !form.installationDate || !form.expiryDate || !form.installationLocation
     ) {
       setSaveError("Please fill in all required fields.");
       return;
     }
+    
+    // Require an IMEI (can be selected from stock or entered manually)
+    if (!form.imei) {
+      setSaveError("Please provide tracker IMEI (select from stock or enter manually).");
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     try {
-      const vehicle = await addVehicle({
-        plate_number: form.plateNumber,
-        imei: form.imei,
-        plan: form.plan,
-        expiry_date: form.expiryDate,
-        installation_date: form.installationDate,
-        trakzee_status: form.trakzeeStatus as "Active" | "Deactivated",
-        individual_customer_id: form.ownerType === "individual" ? form.ownerId : undefined,
-        company_id: form.ownerType === "company" ? form.ownerId : undefined,
-      });
+      if (editingVehicleId) {
+        // Update logic
+        await updateVehicle(editingVehicleId, {
+          plate_number: form.plateNumber,
+          owner_name: form.ownerName,
+          sim_imei: form.simImei,
+          sim_number: form.simNumber,
+          plan: form.plan,
+          expiry_date: form.expiryDate,
+          installation_date: form.installationDate,
+          installation_location: form.installationLocation,
+          trakzee_status: form.trakzeeStatus as "Active" | "Deactivated",
+          individual_customer_id: form.ownerType === "individual" ? form.ownerId : undefined,
+          company_id: form.ownerType === "company" ? form.ownerId : undefined,
+        });
+      } else {
+        // Add logic
+        const vehicle = await addVehicle({
+          plate_number: form.plateNumber,
+          imei: form.imei,
+          inventory_id: form.inventoryId ?? undefined,
+          sim_inventory_id: form.simInventoryId ?? undefined,
+          sim_imei: form.simImei ?? undefined,
+          sim_number: form.simNumber ?? undefined,
+          owner_name: form.ownerName,
+          plan: form.plan,
+          expiry_date: form.expiryDate,
+          installation_date: form.installationDate,
+          installation_location: form.installationLocation,
+          trakzee_status: form.trakzeeStatus as "Active" | "Deactivated",
+          individual_customer_id: form.ownerType === "individual" ? form.ownerId : undefined,
+          company_id: form.ownerType === "company" ? form.ownerId : undefined,
+        });
 
-      // Save initial payment record
-      const selectedPlan = dbPlans.find(p => p.name === form.plan);
-      const amount = selectedPlan ? (selectedPlan.price * parseInt(form.months)) : 0;
-      if (amount > 0 && vehicle) {
-        await savePayment({
-          vehicleId: vehicle.id,
-          vehiclePlate: form.plateNumber,
-          ownerName: form.ownerName,
-          ownerType: form.ownerType as "individual" | "company",
-          planName: form.plan,
-          year: new Date(form.installationDate).getFullYear(),
-          months: parseInt(form.months),
-          amountGhs: amount,
-          paidAt: new Date(form.installationDate).toISOString(),
-        }).catch(() => {});
+        // Save initial payment record if months > 0
+        const monthsCount = parseInt(form.months);
+        if (monthsCount > 0) {
+          const selectedPlan = dbPlans.find(p => p.name === form.plan);
+          const amount = selectedPlan ? (selectedPlan.price * monthsCount) : 0;
+          if (amount > 0 && vehicle) {
+            await savePayment({
+              vehicleId: vehicle.id,
+              vehiclePlate: form.plateNumber,
+              ownerName: form.ownerName,
+              ownerType: form.ownerType as "individual" | "company",
+              planName: form.plan,
+              year: new Date(form.installationDate).getFullYear(),
+              months: monthsCount,
+              amountGhs: amount,
+              paidAt: new Date(form.installationDate).toISOString(),
+            }).catch(() => {});
+          }
+        }
       }
 
       setShowForm(false);
+      if (!editingVehicleId) fetchInventorySeed();
       fetchVehicles();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save vehicle.");
@@ -322,7 +460,9 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
   const handleOpenPay = (v: Vehicle) => {
     setPayTarget(v);
     const base = v.monthly_amount ?? 0;
-    setPayForm({ paymentDate: todayISO(), months: "1", amount: String(base) });
+    const arrears = calculateOwed(v.expiry_date, base, v.trakzee_status);
+    // Initial amount = arrears + 1 month base
+    setPayForm({ paymentDate: todayISO(), months: "1", amount: String(base + arrears) });
     setPayError(null);
   };
 
@@ -330,17 +470,18 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
     if (!payTarget) return;
     const year = new Date(payForm.paymentDate).getFullYear();
     const months = parseInt(payForm.months);
-    const amount = parseFloat(payForm.amount);
+    
+    // Recalculate based on current pricing/arrears logic
+    const base = payTarget.monthly_amount ?? 0;
+    const arrears = calculateOwed(payTarget.expiry_date, base, payTarget.trakzee_status);
+    const amount = (arrears + base * months);
+
     if (!payForm.paymentDate) {
       setPayError("Select a payment date.");
       return;
     }
     if (isNaN(months) || months < 1 || months > 36) {
-      setPayError("Number of months must be between 1 and 24.");
-      return;
-    }
-    if (isNaN(amount) || amount <= 0) {
-      setPayError("Enter a valid amount greater than 0.");
+      setPayError("Number of months must be between 1 and 36.");
       return;
     }
 
@@ -388,11 +529,85 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
     setCustomerSearch("");
   };
 
+  const selectTrackerItem = (item: InventoryItem) => {
+    setForm((prev) => ({
+      ...prev,
+      imei: item.imei_number,
+      inventoryId: item.id,
+    }));
+    setTrackerDropdownOpen(false);
+    setTrackerSearch("");
+  };
+
+  const selectSimItem = (item: InventoryItem) => {
+    setForm((prev) => ({
+      ...prev,
+      simImei: item.imei_number,
+      simInventoryId: item.id,
+    }));
+    setSimDropdownOpen(false);
+    setSimSearch("");
+  };
+
   const totalPages = Math.max(1, Math.ceil(vehicles.length / PAGE_SIZE));
   const pageVehicles = vehicles.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // reset page on search change
   useEffect(() => { setPage(1); }, [search]);
+
+  useEffect(() => {
+    const loadTrackerTypes = async () => {
+      try {
+        // Try multiple variations to be safe against DB case sensitivity
+        const [upper, mixed] = await Promise.all([
+          getInventoryTypesByCategory("TRACKER"),
+          getInventoryTypesByCategory("Tracker")
+        ]);
+        
+        // Combine and de-duplicate by name
+        const combined = [...upper, ...mixed];
+        const unique = combined.filter((v, i, a) => a.findIndex(t => t.name === v.name) === i);
+        
+        setTrackerTypes(unique);
+      } catch (err) {
+        console.error("Failed to fetch tracker types:", err);
+        setTrackerTypes([]);
+      }
+    };
+
+    if (showForm) {
+      loadTrackerTypes();
+    }
+  }, [showForm]);
+
+  useEffect(() => {
+    const loadTrackerItems = async () => {
+      if (!form.trackerType) {
+        setTrackerItems([]);
+        return;
+      }
+      try {
+        // Fetch items for both case variations to ensure we get results
+        const [upper, mixed] = await Promise.all([
+          getInventoryItems({ category: "TRACKER", type: form.trackerType }),
+          getInventoryItems({ category: "Tracker", type: form.trackerType })
+        ]);
+        
+        // Combine and de-duplicate by ID
+        const combined = [...upper, ...mixed];
+        const unique = combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+        
+        setTrackerItems(unique);
+      } catch (err) {
+        console.error("Failed to fetch tracker items:", err);
+        setTrackerItems([]);
+      }
+    };
+
+    if (showForm && form.trackerType) {
+      loadTrackerItems();
+    }
+  }, [form.trackerType, showForm]);
 
   return (
     <div className="space-y-5">
@@ -421,12 +636,13 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
       </div>
 
       {/* ── KPI cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {[
           { label: "TOTAL VEHICLES",   value: vehicleList.length, color: "text-foreground" },
           { label: "TRAKZEE ACTIVE",   value: syncedCount,        color: "text-emerald-600" },
           { label: "DESYNCED / OFF",   value: desyncedCount,      color: "text-amber-600" },
-          { label: "EXPIRED",          value: expiredCount,       color: "text-red-500" },
+          { label: "EXPIRED / DUE",    value: expiredCount,       color: "text-red-500" },
+          { label: "REMOVED",          value: removedCount,       color: "text-gray-500" },
         ].map((s) => (
           <div key={s.label} className="bg-card border border-border rounded-xl px-5 py-4 shadow-sm">
             <p className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{s.label}</p>
@@ -479,7 +695,7 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
               const actionsMenu = (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground">
+                    <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground" onClick={(e) => e.stopPropagation()}>
                       <MoreHorizontal size={15} />
                     </Button>
                   </DropdownMenuTrigger>
@@ -497,6 +713,14 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
                     <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => handleToggleTrakzee(v)}>
                       {v.trakzee_status === "Active" ? "Deactivate Trakzee" : "Activate Trakzee"}
                     </DropdownMenuItem>
+                    <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setViewVehicle(v)}>
+                      <Eye size={12} className="mr-1.5" />
+                      View Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => handleOpenEdit(v)}>
+                      <Pencil size={12} className="mr-1.5" />
+                      Edit Details
+                    </DropdownMenuItem>
                     <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => handleDelete(v.id)}>
                       Remove Vehicle
                     </DropdownMenuItem>
@@ -512,7 +736,14 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
                     <p className="font-semibold text-sm text-foreground truncate">{v.customer_name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{v.phone}</p>
                   </div>
-                  <span className="font-mono text-xs text-muted-foreground truncate">{v.imei}</span>
+                  <div className="min-w-0">
+                    <span className="font-mono text-xs text-muted-foreground truncate block">{v.imei}</span>
+                    {(v.sim_imei || v.sim_number) && (
+                      <span className="text-[0.65rem] text-muted-foreground truncate block">
+                        SIM: {v.sim_imei || "-"} {v.sim_number ? `| No: ${v.sim_number}` : ""}
+                      </span>
+                    )}
+                  </div>
                   <div>
                     <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-orange-50 text-odg-orange border-orange-200">
                       {v.plan}
@@ -528,7 +759,7 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
                   {/* Owed column */}
                   <div className="text-xs font-bold text-red-600 tabular-nums">
                     {(() => {
-                        const owed = calculateOwed(v.expiry_date, v.monthly_amount, v.trakzee_status, v.updated_at);
+                        const owed = calculateOwed(v.expiry_date, v.monthly_amount, v.trakzee_status);
                         return owed > 0 ? `GH₵${owed.toFixed(2)}` : "—";
                     })()}
                   </div>
@@ -556,7 +787,7 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
                     ) : v.sms_status === 'Failed' ? (
                       <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-red-50 text-red-700 border-red-200 w-fit">✕ Failed</Badge>
                     ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
+                      <Badge variant="outline" className="text-[0.7rem] font-semibold px-2.5 py-0.5 bg-zinc-50 text-zinc-500 border-zinc-200 w-fit">Pending</Badge>
                     )}
                     {v.sms_sent_at && (
                       <span className="text-[0.6rem] text-muted-foreground block">
@@ -585,8 +816,13 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>Exp: {new Date(v.expiry_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                    <span className="font-mono truncate max-w-[140px]">{v.imei}</span>
+                    <span className="font-mono truncate max-w-35">{v.imei}</span>
                   </div>
+                  {(v.sim_imei || v.sim_number) && (
+                    <p className="text-[0.7rem] text-muted-foreground truncate">
+                      SIM: {v.sim_imei || "-"} {v.sim_number ? `| No: ${v.sim_number}` : ""}
+                    </p>
+                  )}
                 </div>
               </div>
               );
@@ -640,17 +876,19 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
 
       {/* ── Register Vehicle Dialog ────────────────────────────────────── */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Register New Vehicle</DialogTitle>
-            <DialogDescription>Fill in the vehicle and owner details below.</DialogDescription>
+            <DialogTitle>{editingVehicleId ? "Edit Vehicle Details" : "Register New Vehicle"}</DialogTitle>
+            <DialogDescription>
+              {editingVehicleId ? "Update the owner or vehicle registration info." : "Pick the owner, stock items, and setup details."}
+            </DialogDescription>
           </DialogHeader>
 
           {saveError && (
             <p className="text-sm text-destructive font-medium -mt-1">{saveError}</p>
           )}
 
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-3 py-1">
             {/* Row 1 — Plate & Owner */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5 flex flex-col justify-end">
@@ -709,14 +947,176 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
             </div>
 
             {/* Row 2 — IMEI */}
-            <div className="space-y-1.5">
-              <Label htmlFor="reg-imei" className="text-xs">IMEI</Label>
-              <Input
-                id="reg-imei"
-                placeholder="356938035643809"
-                value={form.imei}
-                onChange={(e) => setForm({ ...form, imei: e.target.value })}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5 flex flex-col justify-end">
+                <Label className="text-xs text-muted-foreground uppercase tracking-tight">Category</Label>
+                <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-muted/30 text-xs font-semibold">
+                  Tracker
+                </div>
+              </div>
+              <div className="space-y-1.5 flex flex-col justify-end">
+                <Label className="text-xs text-muted-foreground uppercase tracking-tight">Tracker Type</Label>
+                <Select
+                  value={form.trackerType}
+                  disabled={!!editingVehicleId}
+                  onValueChange={(val) => {
+                    setTrackerSearch("");
+                    setTrackerDropdownOpen(false);
+                    setForm((prev) => ({ ...prev, trackerType: val, inventoryId: null, imei: "" }));
+                  }}
+                >
+                  <SelectTrigger className="w-full h-9"><SelectValue placeholder={editingVehicleId ? "N/A" : "Select type"} /></SelectTrigger>
+                  <SelectContent className="max-h-75">
+                    {trackerTypes.length === 0 ? (
+                      <div className="p-2 text-xs text-muted-foreground text-center">No tracker types found</div>
+                    ) : (
+                      trackerTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5 flex flex-col justify-end">
+                <Label htmlFor="reg-imei" className="text-xs text-muted-foreground uppercase tracking-tight">Tracker IMEI</Label>
+                <Popover open={trackerDropdownOpen} onOpenChange={setTrackerDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="reg-imei"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={trackerDropdownOpen}
+                      disabled={!!editingVehicleId || !form.trackerType}
+                      className="w-full justify-between font-normal h-9"
+                    >
+                      {form.imei || (editingVehicleId ? form.imei : (form.trackerType ? "Select tracker IMEI..." : "Choose tracker type first"))}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-(--radix-popover-trigger-width) max-h-75 overflow-hidden p-0" align="start">
+                    <div className="flex items-center border-b px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <input
+                        placeholder="Search tracker IMEI..."
+                        value={trackerSearch}
+                        onChange={(e) => setTrackerSearch(e.target.value)}
+                        className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                      />
+                    </div>
+                    <div className="max-h-50 overflow-y-auto p-1">
+                      {filteredTrackerItems.length === 0 ? (
+                        <div className="py-6 text-center text-sm text-muted-foreground">No tracker IMEI found.</div>
+                      ) : (
+                        filteredTrackerItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className={cn(
+                              "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                              form.inventoryId === item.id ? "bg-accent/50" : "",
+                            )}
+                            onClick={() => selectTrackerItem(item)}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", form.inventoryId === item.id ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col">
+                              <span className="font-medium text-foreground">{item.imei_number}</span>
+                              <span className="text-xs text-muted-foreground">{item.type}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <div className="mt-2">
+                  <Label htmlFor="reg-imei-manual" className="text-xs text-muted-foreground">Or enter IMEI manually</Label>
+                  <Input
+                    id="reg-imei-manual"
+                    placeholder="Enter tracker IMEI"
+                    value={form.imei}
+                    onChange={(e) => setForm((prev) => ({ ...prev, imei: e.target.value }))}
+                    disabled={!!form.inventoryId}
+                  />
+                  {form.inventoryId && (
+                    <p className="text-[0.7rem] text-muted-foreground mt-1">Inventory selected — manual edit disabled.</p>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5 flex flex-col justify-end">
+                <Label htmlFor="reg-sim-imei" className="text-xs text-muted-foreground uppercase tracking-tight">SIM IMEI</Label>
+                <Popover open={simDropdownOpen} onOpenChange={setSimDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="reg-sim-imei"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={simDropdownOpen}
+                      disabled={!!editingVehicleId}
+                      className="w-full justify-between font-normal h-9"
+                    >
+                      {form.simImei || "Select SIM IMEI..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-(--radix-popover-trigger-width) max-h-75 overflow-hidden p-0" align="start">
+                    <div className="flex items-center border-b px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      <input
+                        placeholder="Search SIM IMEI..."
+                        value={simSearch}
+                        onChange={(e) => setSimSearch(e.target.value)}
+                        className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                      />
+                    </div>
+                    <div className="max-h-50 overflow-y-auto p-1">
+                      {filteredSimItems.length === 0 ? (
+                        <div className="py-6 text-center text-sm text-muted-foreground">No SIM IMEI found.</div>
+                      ) : (
+                        filteredSimItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className={cn(
+                              "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                              form.simInventoryId === item.id ? "bg-accent/50" : "",
+                            )}
+                            onClick={() => selectSimItem(item)}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", form.simInventoryId === item.id ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col">
+                              <span className="font-medium text-foreground">{item.imei_number}</span>
+                              <span className="text-xs text-muted-foreground">{item.type}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <div className="mt-2">
+                  <Label htmlFor="reg-sim-imei-manual" className="text-xs text-muted-foreground">Or enter SIM IMEI manually</Label>
+                  <Input
+                    id="reg-sim-imei-manual"
+                    placeholder="Enter SIM IMEI"
+                    value={form.simImei}
+                    onChange={(e) => setForm((prev) => ({ ...prev, simImei: e.target.value }))}
+                    disabled={!!form.simInventoryId}
+                  />
+                  {form.simInventoryId && (
+                    <p className="text-[0.7rem] text-muted-foreground mt-1">SIM inventory selected — manual edit disabled.</p>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5 flex flex-col justify-end">
+                <Label htmlFor="reg-sim-number" className="text-xs text-muted-foreground uppercase tracking-tight">SIM Number</Label>
+                <Input
+                  id="reg-sim-number"
+                  placeholder="e.g. 0244123456"
+                  value={form.simNumber}
+                  onChange={(e) => setForm((prev) => ({ ...prev, simNumber: e.target.value }))}
+                />
+              </div>
             </div>
 
             {/* Row 3 — Plan & Trakzee */}
@@ -755,49 +1155,65 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
                 }} />
               </div>
               <div className="space-y-1.5 flex flex-col justify-end">
-                <Label className="text-xs">Months of Usage</Label>
-                <Select value={form.months} onValueChange={(val) => {
-                  const newExpiry = addMonths(form.installationDate || todayISO(), parseInt(val));
-                  setForm({ ...form, months: val, expiryDate: newExpiry });
-                }}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Months" /></SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 36 }, (_, i) => i + 1).map((m) => (
-                      <SelectItem key={m} value={String(m)}>{m} month{m > 1 ? "s" : ""}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">{editingVehicleId ? "Override Expiry" : "Months of Usage"}</Label>
+                {editingVehicleId ? (
+                   <Input id="reg-expiry-edit" type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} />
+                ) : (
+                  <Select value={form.months} onValueChange={(val) => {
+                    const newExpiry = addMonths(form.installationDate || todayISO(), parseInt(val));
+                    setForm({ ...form, months: val, expiryDate: newExpiry });
+                  }}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Months" /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 36 }, (_, i) => i + 1).map((m) => (
+                        <SelectItem key={m} value={String(m)}>{m} month{m > 1 ? "s" : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="reg-install-location" className="text-xs">Installation Location</Label>
+              <Input
+                id="reg-install-location"
+                placeholder="Enter installation location"
+                value={form.installationLocation}
+                onChange={(e) => setForm({ ...form, installationLocation: e.target.value })}
+              />
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5 flex flex-col justify-end">
-                <Label htmlFor="reg-expiry" className="text-xs">Expiry Date</Label>
-                <Input 
-                  id="reg-expiry" 
-                  type="date" 
-                  value={form.expiryDate || addMonths(form.installationDate || todayISO(), parseInt(form.months))} 
-                  onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
-                  className="focus:ring-odg-orange/30"
-                />
-              </div>
-              <div className="space-y-1.5 flex flex-col justify-end">
-                <Label className="text-xs font-semibold text-odg-orange">Total Initial Charge</Label>
-                <div className="h-9 flex items-center px-3 rounded-md border border-odg-orange/30 bg-orange-50/50 text-orange-700 font-bold text-sm">
-                  {(() => {
-                    const sp = dbPlans.find(p => p.name === form.plan);
-                    if (!sp) return "GH₵ 0.00";
-                    return `GH₵ ${(sp.price * parseInt(form.months)).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-                  })()}
+            {!editingVehicleId && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5 flex flex-col justify-end">
+                  <Label htmlFor="reg-expiry-calc" className="text-xs">Calculated Expiry</Label>
+                  <Input 
+                    id="reg-expiry-calc" 
+                    type="date" 
+                    readOnly
+                    value={form.expiryDate || addMonths(form.installationDate || todayISO(), parseInt(form.months))} 
+                    className="bg-muted focus:ring-0 cursor-default"
+                  />
+                </div>
+                <div className="space-y-1.5 flex flex-col justify-end">
+                  <Label className="text-xs font-semibold text-odg-orange">Total Initial Charge</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md border border-odg-orange/30 bg-orange-50/50 text-orange-700 font-bold text-sm">
+                    {(() => {
+                      const sp = dbPlans.find(p => p.name === form.plan);
+                      if (!sp) return "GH₵ 0.00";
+                      return `GH₵ ${(sp.price * parseInt(form.months)).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                    })()}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? <><Loader2 size={14} className="animate-spin mr-2" />Saving…</> : "Save Vehicle"}
+            <Button onClick={handleSave} disabled={saving} className="bg-odg-orange text-white hover:brightness-95 min-w-32">
+              {saving ? <><Loader2 size={14} className="animate-spin mr-2" />Saving…</> : (editingVehicleId ? "Save Changes" : "Register Vehicle")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -846,7 +1262,8 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
                 value={payForm.months}
                 onValueChange={(val) => {
                   const base = payTarget?.monthly_amount ?? 0;
-                  setPayForm({ ...payForm, months: val, amount: String(base * parseInt(val)) });
+                  const arrears = calculateOwed(payTarget?.expiry_date, base, payTarget?.trakzee_status);
+                  setPayForm({ ...payForm, months: val, amount: String(base * parseInt(val) + arrears) });
                 }}
               >
                 <SelectTrigger id="pay-months" className="w-full">
@@ -866,16 +1283,20 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
               const expiryStr = toDateStr(payTarget.expiry_date);
               const isExpired = expiryStr < todayStr;
               const startStr = isExpired ? todayStr : expiryStr;
-              const newExpiryStr = addMonths(startStr, parseInt(payForm.months));
+              const monthsToPay = parseInt(payForm.months);
+              
+              // Calculate new expiry: If expired, it starts from today. If not, it adds to existing expiry.
+              const newExpiryStr = addMonths(startStr, monthsToPay);
               const [ny, nm, nd] = newExpiryStr.split("-").map(Number);
               const newDue = new Date(ny, nm - 1, nd).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+              
               return (
                 <div className="space-y-1.5">
                   <Label className="text-xs">New Expiry Date</Label>
                   <div className={`flex items-center gap-2 h-9 px-3 rounded-lg border text-sm font-semibold ${isExpired ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}>
                     <span>{newDue}</span>
                     <span className="text-[0.65rem] font-normal text-muted-foreground ml-auto">
-                      {isExpired ? `starting from today + ${payForm.months} mo` : `from expiry + ${payForm.months} mo`}
+                      {isExpired ? `Active coverage: ${monthsToPay} mo from today` : `Extended: +${monthsToPay} mo`}
                     </span>
                   </div>
                 </div>
@@ -885,21 +1306,47 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
             {/* Amount Due */}
             <div className="space-y-1.5">
               <Label htmlFor="pay-amount" className="text-xs">
-                Amount Due (GH₵)
-                <span className="ml-1.5 text-muted-foreground font-normal">
-                  = GH₵{payTarget?.monthly_amount ?? 0} × {payForm.months} month{parseInt(payForm.months) > 1 ? "s" : ""}
-                </span>
+                Total Charge (GH₵)
               </Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">GH₵</span>
-                <Input
-                  id="pay-amount"
-                  type="number"
-                  readOnly
-                  value={payForm.amount}
-                  className="pl-10 bg-muted/50 cursor-default font-semibold text-emerald-700"
-                />
-              </div>
+              {payTarget && (() => {
+                const base = payTarget.monthly_amount ?? 0;
+                const arrears = calculateOwed(payTarget.expiry_date, base, payTarget.trakzee_status);
+                const monthsToPay = parseInt(payForm.months);
+                const currentSub = base * monthsToPay;
+                const total = (arrears + currentSub);
+                
+                return (
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-[11px] bg-muted/30 p-2 rounded-md mb-2 border border-border/50">
+                      <div className="flex flex-col">
+                        <span className="text-muted-foreground uppercase text-[9px] font-bold">Breakdown</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-red-600 font-bold">GH₵{arrears.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                          <span className="text-muted-foreground font-medium">+</span>
+                          <span className="text-foreground font-bold">GH₵{currentSub.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-muted-foreground uppercase text-[9px] font-bold">Total to Pay</span>
+                        <p className="text-emerald-700 font-black text-xs">GH₵{total.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">GH₵</span>
+                      <Input
+                        id="pay-amount"
+                        type="number"
+                        readOnly
+                        value={total.toFixed(2)}
+                        className="pl-10 bg-muted/50 cursor-default font-bold text-emerald-700 text-lg"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground px-1 italic">
+                      * Arrears are calculated based on months active in Trakzee past expiry.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -919,9 +1366,9 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
           <Dialog open={!!confirmRemoveId} onOpenChange={(open) => { if (!open) setConfirmRemoveId(null); }}>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Remove Vehicle</DialogTitle>
+                <DialogTitle>Delete Vehicle</DialogTitle>
                 <DialogDescription>
-                  This vehicle will be moved to the Removed list. You can restore it later.
+                  This action is permanent and cannot be undone. All subscription data for this vehicle will be deleted.
                 </DialogDescription>
               </DialogHeader>
               {target && (
@@ -942,14 +1389,96 @@ export default function VehiclesView({ onNavigate }: { onNavigate?: (s: string) 
               )}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setConfirmRemoveId(null)}>Cancel</Button>
-                <Button onClick={handleConfirmRemove} className="bg-destructive hover:bg-destructive/90 text-white">
-                  Remove Vehicle
+                <Button 
+                  onClick={handleConfirmRemove} 
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold"
+                >
+                  Confirm Delete
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         );
       })()}
+
+      {/* ── Vehicle Details Dialog ────────────────────────────────────── */}
+      <Dialog open={!!viewVehicle} onOpenChange={(open) => { if (!open) setViewVehicle(null); }}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Car className="h-5 w-5 text-odg-orange" />
+              Vehicle Details
+            </DialogTitle>
+            <DialogDescription>
+              Detailed information for <span className="font-bold text-foreground">{viewVehicle?.plate_number}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewVehicle && (
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 py-4 text-sm">
+              <div className="space-y-1">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Owner / Contact</p>
+                <p className="font-semibold">{viewVehicle.customer_name}</p>
+                <p className="text-muted-foreground">{viewVehicle.phone}</p>
+              </div>
+              <div className="space-y-1 text-right">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Status</p>
+                <Badge variant="outline" className={cn(
+                  "font-bold px-2 py-0.5",
+                  viewVehicle.trakzee_status === "Active" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-red-50 text-red-600 border-red-200"
+                )}>
+                  Trakzee {viewVehicle.trakzee_status}
+                </Badge>
+              </div>
+
+              <div className="col-span-2 border-t border-border pt-4">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground mb-3">Hardware Information</p>
+                <div className="grid grid-cols-2 gap-4 bg-muted/30 p-3 rounded-lg border border-border">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Tracker IMEI</p>
+                    <p className="font-mono font-bold text-xs">{viewVehicle.imei}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">SIM IMEI / Number</p>
+                    <p className="font-mono font-bold text-xs">{viewVehicle.sim_imei || "—"}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-span-2 border-t border-border pt-4">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground mb-3">Subscription & Installation</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase">Service Plan</p>
+                    <Badge variant="outline" className="bg-orange-50 text-odg-orange border-orange-200 font-bold">{viewVehicle.plan}</Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase">Expiry Date</p>
+                    <p className="font-semibold">{new Date(viewVehicle.expiry_date).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase">Installation Date</p>
+                    <p className="font-semibold">
+                      {viewVehicle.installation_date ? new Date(viewVehicle.installation_date).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }) : "—"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase">Installation Location</p>
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <MapPin size={12} className="text-muted-foreground" />
+                      {viewVehicle.installation_location || "—"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewVehicle(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

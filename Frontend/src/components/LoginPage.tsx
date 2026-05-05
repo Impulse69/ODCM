@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { Activity, Eye, EyeOff, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import Image from "next/image";
 
@@ -17,12 +17,74 @@ export default function LoginPage() {
   const { success: toastSuccess, error: toastError } = useToast();
   const router = useRouter();
 
-  // Redirect to dashboard if already authenticated
+  // Redirect to dashboard if already authenticated.
+  // Add a small debounce and don't redirect while the user is interacting with inputs
+  const isInteracting = useRef(false);
+  const redirectTimeoutRef = useRef<number | null>(null);
+
+  type ReloadTraceEntry = {
+    event: string;
+    ts: string;
+    url?: string;
+    state?: string;
+  };
+
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.replace("/dashboard");
+    console.log("[LoginPage] render", { isLoading, isAuthenticated });
+    if (redirectTimeoutRef.current) {
+      clearTimeout(redirectTimeoutRef.current as unknown as number);
     }
+    redirectTimeoutRef.current = window.setTimeout(() => {
+      if (!isLoading && isAuthenticated && !isInteracting.current) {
+        console.log("[LoginPage] redirecting to /dashboard");
+        router.replace("/dashboard");
+      }
+    }, 350);
+
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current as unknown as number);
+      }
+      console.log("[LoginPage] cleanup");
+    };
   }, [isAuthenticated, isLoading, router]);
+
+  // Lightweight reload / navigation tracer (records into sessionStorage)
+  useEffect(() => {
+    const key = 'odcms_reload_trace';
+    function pushTrace(entry: ReloadTraceEntry) {
+      try {
+        const existing = JSON.parse(sessionStorage.getItem(key) || '[]');
+        existing.push(entry);
+        sessionStorage.setItem(key, JSON.stringify(existing.slice(-50)));
+        console.log('[LoginPage] trace:', entry);
+      } catch {
+        // ignore
+      }
+    }
+
+    const onBeforeUnload = () => {
+      pushTrace({ event: 'beforeunload', ts: new Date().toISOString(), url: window.location.href });
+    };
+
+    const onVisibility = () => {
+      pushTrace({ event: 'visibilitychange', state: document.visibilityState, ts: new Date().toISOString() });
+    };
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Print recent trace on mount for quick inspection
+    try {
+      const recent = JSON.parse(sessionStorage.getItem(key) || '[]');
+      if (recent && recent.length) console.log('[LoginPage] recent reload trace', recent.slice(-10));
+    } catch {}
+
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -68,7 +130,7 @@ export default function LoginPage() {
           {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-lg overflow-hidden p-1">
-              <img src="/favicon.png" alt="ODCMS Logo" className="w-full h-full object-contain" />
+              <Image src="/favicon.png" alt="ODCMS Logo" width={48} height={48} className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="font-extrabold text-xl text-white leading-tight tracking-tight">ODCMS</div>
@@ -117,7 +179,7 @@ export default function LoginPage() {
           {/* Mobile logo (shown below lg) */}
           <div className="lg:hidden flex items-center gap-3 justify-center mb-4">
             <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-md overflow-hidden p-1">
-              <img src="/favicon.png" alt="ODCMS Logo" className="w-full h-full object-contain" />
+              <Image src="/favicon.png" alt="ODCMS Logo" width={40} height={40} className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="font-extrabold text-lg text-foreground leading-tight">ODCMS</div>
@@ -163,6 +225,8 @@ export default function LoginPage() {
                   placeholder="admin@odg.com.gh"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onFocus={() => (isInteracting.current = true)}
+                  onBlur={() => (isInteracting.current = false)}
                   required
                   autoComplete="email"
                   className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
@@ -196,6 +260,8 @@ export default function LoginPage() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => (isInteracting.current = true)}
+                  onBlur={() => (isInteracting.current = false)}
                   required
                   autoComplete="current-password"
                   className="w-full pl-10 pr-11 py-2.5 text-sm rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"

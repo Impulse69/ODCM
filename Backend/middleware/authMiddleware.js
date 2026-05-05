@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { findById } = require('../Models/User');
 
 if (!process.env.JWT_SECRET) {
   console.error('[FATAL] JWT_SECRET is not set in environment.');
@@ -16,7 +17,7 @@ function isSuperAdminRole(role) {
   return normalized === 'super admin';
 }
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -26,7 +27,21 @@ function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    const user = await findById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not found' });
+    }
+    if (user.is_active === false) {
+      return res.status(403).json({ success: false, message: 'This account is inactive. Please contact your administrator.' });
+    }
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      initials: user.initials,
+      is_active: user.is_active,
+    };
     next();
   } catch {
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });
@@ -39,7 +54,7 @@ function requireSuperAdmin(req, res, next) {
   }
 
   if (!isSuperAdminRole(req.user.role)) {
-    return res.status(403).json({ success: false, message: 'Only super admin users can access inventory.' });
+    return res.status(403).json({ success: false, message: 'Only super admin users can access this resource.' });
   }
 
   next();

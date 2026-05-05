@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Phone, Mail, MapPin, Car, Hash, TrendingDown } from "lucide-react";
+import { Building2, Phone, Mail, Car, Hash, TrendingDown } from "lucide-react";
 import {
   getCompanyById,
   getCompanySubscriptions,
@@ -43,17 +43,19 @@ export default function CompanyProfile({ id, onClose }: CompanyProfileProps) {
 
   useEffect(() => {
     if (id) {
-      setLoading(true);
+      let isMounted = true;
       Promise.all([
         getCompanyById(id),
         getCompanySubscriptions(id),
         getPlans()
       ]).then(([comp, vehs, allPlans]) => {
+        if (!isMounted) return;
         setCompany(comp);
         setVehicles(vehs);
         setPlans(allPlans);
         setLoading(false);
       });
+      return () => { isMounted = false; };
     }
   }, [id]);
 
@@ -64,7 +66,7 @@ export default function CompanyProfile({ id, onClose }: CompanyProfileProps) {
   
   const owingAmount = vehicles.reduce((sum, v) => {
     const planPrice = plans.find(p => p.name === v.plan)?.price || v.monthly_amount;
-    return sum + calculateOwed(v.expiry_date, Number(planPrice), v.trakzee_status, v.updated_at);
+    return sum + calculateOwed(v.expiry_date, Number(planPrice), v.trakzee_status);
   }, 0);
 
   return (
@@ -156,7 +158,7 @@ export default function CompanyProfile({ id, onClose }: CompanyProfileProps) {
                       <thead>
                         <tr className="bg-muted/50 border-b border-border">
                           <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Vehicle</th>
-                          <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground text-red-600">Arrears</th>
+                          <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-red-600">Arrears</th>
                           <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Trakzee</th>
                           <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Expiry</th>
                           <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
@@ -167,7 +169,7 @@ export default function CompanyProfile({ id, onClose }: CompanyProfileProps) {
                         {vehicles.map((v) => {
                           const cs = computeStatus(v.expiry_date, v.status);
                           const planPrice = plans.find(p => p.name === v.plan)?.price || v.monthly_amount;
-                          const owed = calculateOwed(v.expiry_date, Number(planPrice), v.trakzee_status, v.updated_at);
+                          const owed = calculateOwed(v.expiry_date, Number(planPrice), v.trakzee_status);
                           
                           return (
                             <tr key={v.id} className="hover:bg-muted/20 transition-colors">

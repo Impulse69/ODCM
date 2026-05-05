@@ -20,6 +20,8 @@ const {
   deleteSubscription,
 } = require('../Models/Customer');
 
+const { recordAuditLog } = require('../Models/AuditLog');
+
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 function generateId(prefix, name) {
@@ -70,6 +72,20 @@ async function addIndividual(req, res) {
     }
     const id = generateId('CUST', name);
     const customer = await createIndividual({ id, name, phone, contact_person, email, address, city, postal_code });
+
+    await recordAuditLog({
+      actorUserId: req.user?.id,
+      actorName: req.user?.name || req.user?.email || 'System',
+      actorEmail: req.user?.email,
+      actorRole: req.user?.role,
+      action: 'CREATE',
+      entityType: 'Individual Customer',
+      entityId: id,
+      section: 'Customers',
+      title: `Added Individual: ${name}`,
+      afterData: customer,
+    });
+
     res.status(201).json({ success: true, data: customer });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -90,7 +106,24 @@ async function editIndividual(req, res) {
 // DELETE /api/customers/individuals/:id
 async function removeIndividual(req, res) {
   try {
+    const customer = await getIndividualById(req.params.id);
     await deleteIndividual(req.params.id);
+
+    if (customer) {
+      await recordAuditLog({
+        actorUserId: req.user?.id,
+        actorName: req.user?.name || req.user?.email || 'System',
+        actorEmail: req.user?.email,
+        actorRole: req.user?.role,
+        action: 'DELETE',
+        entityType: 'Individual Customer',
+        entityId: req.params.id,
+        section: 'Customers',
+        title: `Deleted Individual: ${customer.name}`,
+        beforeData: customer,
+      });
+    }
+
     res.json({ success: true, message: 'Individual deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -135,6 +168,20 @@ async function addCompany(req, res) {
     }
     const id = generateId('CO', company_name);
     const company = await createCompany({ id, company_name, billing_contact_name, contact_phone, email, address, city, postal_code, tax_id, status, total_accounts });
+
+    await recordAuditLog({
+      actorUserId: req.user?.id,
+      actorName: req.user?.name || req.user?.email || 'System',
+      actorEmail: req.user?.email,
+      actorRole: req.user?.role,
+      action: 'CREATE',
+      entityType: 'Company Customer',
+      entityId: id,
+      section: 'Customers',
+      title: `Added Company: ${company_name}`,
+      afterData: company,
+    });
+
     res.status(201).json({ success: true, data: company });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -155,7 +202,24 @@ async function editCompany(req, res) {
 // DELETE /api/customers/companies/:id
 async function removeCompany(req, res) {
   try {
+    const company = await getCompanyById(req.params.id);
     await deleteCompany(req.params.id);
+
+    if (company) {
+      await recordAuditLog({
+        actorUserId: req.user?.id,
+        actorName: req.user?.name || req.user?.email || 'System',
+        actorEmail: req.user?.email,
+        actorRole: req.user?.role,
+        action: 'DELETE',
+        entityType: 'Company Customer',
+        entityId: req.params.id,
+        section: 'Customers',
+        title: `Deleted Company: ${company.company_name}`,
+        beforeData: company,
+      });
+    }
+
     res.json({ success: true, message: 'Company deleted.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

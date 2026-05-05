@@ -7,6 +7,7 @@ const { createPlansTable } = require('./Models/Subscription');
 const { createPaymentHistoryTable } = require('./Models/PaymentHistory');
 const { createUsersTable, seedDefaultAdmin } = require('./Models/User');
 const { createInventoryTables } = require('./Models/Inventory');
+const { createAuditLogsTable } = require('./Models/AuditLog');
 const { executeSmsJob } = require('./Controllers/SmsController');
 const customerRouter        = require('./Routers/customerRouter');
 const vehicleRouter         = require('./Routers/vehicleRouter');
@@ -16,6 +17,8 @@ const bulkImportRouter      = require('./Routers/bulkImportRouter');
 const authRouter            = require('./Routers/authRouter');
 const smsRouter             = require('./Routers/smsRouter');
 const inventoryRouter       = require('./Routers/inventoryRouter');
+const userRouter            = require('./Routers/userRouter');
+const auditLogRouter        = require('./Routers/auditLogRouter');
 const { authenticateToken, requireSuperAdmin } = require('./middleware/authMiddleware');
 
 const app = express();
@@ -32,7 +35,9 @@ app.use('/api/plans',         authenticateToken, subscriptionRouter);
 app.use('/api/payments',      authenticateToken, paymentHistoryRouter);
 app.use('/api/bulk-import',   authenticateToken, bulkImportRouter);
 app.use('/api/sms',           authenticateToken, smsRouter);
-app.use('/api/inventory',     authenticateToken, requireSuperAdmin, inventoryRouter);
+app.use('/api/inventory',     authenticateToken, inventoryRouter);
+app.use('/api/users',         authenticateToken, requireSuperAdmin, userRouter);
+app.use('/api/audit-logs',    authenticateToken, requireSuperAdmin, auditLogRouter);
 
 // Test route to check DB connection
 app.get('/api/test-db', async (req, res) => {
@@ -56,7 +61,8 @@ app.listen(PORT, async () => {
 		await createPaymentHistoryTable();
 		await createUsersTable();
 		await createInventoryTables();
-		await seedDefaultAdmin();
+		await createAuditLogsTable();
+		// await seedDefaultAdmin();
 		console.log('Database tables synced.');
 	} catch (err) {
 		console.error('Failed to sync tables:', err.message);
@@ -64,16 +70,18 @@ app.listen(PORT, async () => {
 });
 
 // ─── SMS auto-scheduler ────────────────────────────────────────────────────────
-// Runs once 30 seconds after startup (to allow DB tables to finish syncing),
-// then repeats every hour.
+// Runs every hour to check for due soon and expired vehicles.
+// The shorter interval reduces the chance of missing a reminder window.
 function runScheduledSmsJob() {
-	console.log('[SMS Scheduler] Running job...');
+	console.log(`[SMS Scheduler] Starting job check at ${new Date().toISOString()}...`);
 	executeSmsJob()
-		.then(r => console.log(`[SMS Scheduler] Done — sent:${r.sent} failed:${r.failed} removed:${r.removed} skipped:${r.skipped}`))
-		.catch(err => console.error('[SMS Scheduler] Error:', err.message));
+		.then(r => console.log(`[SMS Scheduler] Finished — sent:${r.sent} failed:${r.failed} removed:${r.removed} skipped:${r.skipped}`))
+		.catch(err => console.error('[SMS Scheduler] Job Error:', err.message));
 }
 
+// Initial run after tables sync (60s delay to let server stabilize)
 setTimeout(() => {
 	runScheduledSmsJob();
-	setInterval(runScheduledSmsJob, 60000); // repeat every 1 minute
-}, 30000);
+	// Run every hour (60 * 60 * 1000)
+	setInterval(runScheduledSmsJob, 3600000);
+}, 60000);

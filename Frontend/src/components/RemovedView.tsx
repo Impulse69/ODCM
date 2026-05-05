@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Search, ShieldOff, AlertTriangle, Car, TrendingDown, Loader2, CreditCard, CheckCircle2 } from "lucide-react";
+import { Search, ShieldOff, AlertTriangle, Car, TrendingDown, Loader2, CreditCard, CheckCircle2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -17,11 +17,11 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
 import { getVehicles, updateTrakzee, updateVehicleExpiry, getRemovedVehicles, type Vehicle } from "@/lib/vehicles-api";
+import { sendVehicleSms } from "@/lib/sms-api";
 import { savePayment } from "@/lib/payment-history";
 import { getPlans, type Plan } from "@/lib/plans-api";
 import { cn } from "@/lib/utils";
@@ -58,6 +58,8 @@ export default function RemovedView() {
         manualDebt: "0",
     });
 
+    const [smsLoading, setSmsLoading] = useState<string | null>(null);
+
     const [plans, setPlans] = useState<Plan[]>([]);
 
     const fetchRemoved = useCallback(async () => {
@@ -84,6 +86,20 @@ export default function RemovedView() {
             setLoading(false);
         }
     }, []);
+
+    const handleSendSms = async (v: Vehicle) => {
+        setSmsLoading(v.id);
+        try {
+            const result = await sendVehicleSms(v.id);
+            setRemovedList(prev => prev.map(item => 
+                item.id === v.id ? { ...item, sms_status: result.smsStatus, sms_sent_at: new Date().toISOString() } : item
+            ));
+        } catch {
+            // silent fail
+        } finally {
+            setSmsLoading(null);
+        }
+    };
 
     useEffect(() => {
         fetchRemoved();
@@ -118,15 +134,15 @@ export default function RemovedView() {
 
     const openPayDialog = (v: Vehicle) => {
         const currentPrice = plans.find(p => p.name === v.plan)?.price || v.monthly_amount;
-        const debt = calculateOwed(v.expiry_date, Number(currentPrice), v.trakzee_status, v.updated_at);
+        const debt = calculateOwed(v.expiry_date, Number(currentPrice), v.trakzee_status);
         setPayTarget(v);
         setPayError(null);
         setPayForm({
             year: new Date().getFullYear().toString(),
             months: "1",
             plan: v.plan,
-            manualDebt: debt.toString(),
-            amount: (debt + Number(currentPrice)).toFixed(2)
+            manualDebt: String(Math.max(0, debt)), // Ensure no negative debt
+            amount: (Math.max(0, debt) + Number(currentPrice)).toFixed(2)
         });
     };
 
@@ -164,8 +180,9 @@ export default function RemovedView() {
 
             setPayTarget(null);
             fetchRemoved();
-        } catch (err: any) {
-            setPayError(err.message || "Failed to restore vehicle.");
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to restore vehicle.";
+            setPayError(message);
         } finally {
             setRestoring(false);
         }
@@ -175,7 +192,7 @@ export default function RemovedView() {
     const frozenArrears = removedList.filter(v => v.trakzee_status === "Deactivated").length;
     const totalArrears = removedList.reduce((sum, v) => {
         const p = plans.find(pl => pl.name === v.plan)?.price || v.monthly_amount;
-        return sum + calculateOwed(v.expiry_date, Number(p), v.trakzee_status, v.updated_at);
+        return sum + calculateOwed(v.expiry_date, Number(p), v.trakzee_status);
     }, 0);
 
     return (
@@ -261,8 +278,8 @@ export default function RemovedView() {
 
             {/* List Section */}
             <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-                <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.6fr_0.7fr_0.8fr_0.6fr_0.6fr_120px] gap-4 px-6 py-4 border-b border-border bg-muted/30">
-                    {["Customer", "Vehicle", "Plan", "Expiry", "Owed", "Trakzee", "Status", "Action"].map((col) => (
+                <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.6fr_0.7fr_0.8fr_0.6fr_0.6fr_0.6fr_120px] gap-4 px-6 py-4 border-b border-border bg-muted/30">
+                    {["Customer", "Vehicle", "Plan", "Expiry", "Owed", "Trakzee", "SMS", "Status", "Action"].map((col) => (
                         <span key={col} className="text-[0.65rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
                     ))}
                 </div>
@@ -287,11 +304,11 @@ export default function RemovedView() {
                             const isExpired = expiry < today;
                             const expiryLabel = expiry.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
                             const currentPrice = plans.find(p => p.name === s.plan)?.price || s.monthly_amount;
-                            const owed = calculateOwed(s.expiry_date, Number(currentPrice), s.trakzee_status, s.updated_at);
+                            const owed = calculateOwed(s.expiry_date, Number(currentPrice), s.trakzee_status);
 
                             return (
                                 <div key={s.id} className="hover:bg-muted/10 transition-colors">
-                                    <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.6fr_0.7fr_0.8fr_0.6fr_0.6fr_120px] gap-4 items-center px-6 py-5">
+                                    <div className="hidden sm:grid grid-cols-[1.5fr_1fr_0.6fr_0.7fr_0.8fr_0.6fr_0.6fr_0.6fr_120px] gap-4 items-center px-6 py-5">
                                         {/* Customer */}
                                         <div className="min-w-0">
                                             <p className="font-bold text-sm text-foreground truncate">{s.customer_name}</p>
@@ -344,6 +361,28 @@ export default function RemovedView() {
                                             >
                                                 {trakzeeLoading === s.id ? <Loader2 size={10} className="animate-spin" /> : s.trakzee_status}
                                             </Button>
+                                        </div>
+
+                                        {/* SMS Status */}
+                                        <div>
+                                            <div className="flex flex-col items-center gap-1">
+                                                {s.sms_status === 'Sent' ? (
+                                                    <Badge variant="outline" className="text-[0.6rem] font-bold px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap">✓ Sent</Badge>
+                                                ) : s.sms_status === 'Failed' ? (
+                                                    <Badge variant="outline" className="text-[0.6rem] font-bold px-1.5 py-0 bg-red-50 text-red-700 border-red-200 whitespace-nowrap">✕ Failed</Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[0.6rem] font-bold px-1.5 py-0 bg-zinc-50 text-zinc-500 border-zinc-200 whitespace-nowrap">Pending</Badge>
+                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleSendSms(s)}
+                                                    disabled={smsLoading === s.id}
+                                                    className="h-6 w-6 rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
+                                                >
+                                                    {smsLoading === s.id ? <Loader2 size={10} className="animate-spin" /> : <MessageSquare size={10} />}
+                                                </Button>
+                                            </div>
                                         </div>
 
                                         {/* Status */}
@@ -453,7 +492,7 @@ export default function RemovedView() {
                             </div>
 
                             <div className="space-y-1.5">
-                                <Label className="text-[0.65rem] font-bold text-muted-foreground uppercase tracking-widest text-red-500">Unpaid Debt (Arrears)</Label>
+                                <Label className="text-[0.65rem] font-bold uppercase tracking-widest text-red-500">Unpaid Debt (Arrears)</Label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-red-400">GH₵</span>
                                     <Input

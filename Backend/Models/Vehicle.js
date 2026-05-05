@@ -12,10 +12,13 @@ const BASE_SELECT = `
     s.id,
     s.plate_number,
     s.imei,
+    s.sim_imei,
+    s.sim_number,
     s.plan,
     s.monthly_amount,
     s.expiry_date,
     s.installation_date,
+    s.installation_location,
     s.status,
     s.trakzee_status,
     s.individual_customer_id,
@@ -80,10 +83,13 @@ async function createVehicle({
   id,
   plate_number,
   imei,
+  sim_imei,
+  sim_number,
   plan,
   monthly_amount,
   expiry_date,
   installation_date,
+  installation_location,
   status,
   trakzee_status,
   individual_customer_id,
@@ -92,9 +98,9 @@ async function createVehicle({
   const { rows } = await pool.query(
     `INSERT INTO subscriptions
        (id, plate_number, imei, plan, monthly_amount, expiry_date,
-        installation_date, status, trakzee_status,
+        installation_date, installation_location, sim_imei, sim_number, status, trakzee_status,
         individual_customer_id, company_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      RETURNING *`,
     [
       id,
@@ -104,6 +110,9 @@ async function createVehicle({
       monthly_amount,
       expiry_date,
       installation_date ?? null,
+      installation_location ?? null,
+      sim_imei ?? null,
+      sim_number ?? null,
       status ?? 'Active',
       trakzee_status ?? 'Active',
       individual_customer_id ?? null,
@@ -115,8 +124,8 @@ async function createVehicle({
 
 async function updateVehicle(id, fields) {
   const allowed = [
-    'plate_number', 'imei', 'plan', 'monthly_amount',
-    'expiry_date', 'installation_date', 'status', 'trakzee_status',
+    'plate_number', 'imei', 'sim_imei', 'sim_number', 'plan', 'monthly_amount',
+    'expiry_date', 'installation_date', 'installation_location', 'status', 'trakzee_status',
     'sms_status', 'sms_sent_at', 'last_sms_type', 'grace_period_days',
   ];
   const updates = [];
@@ -141,12 +150,10 @@ async function updateVehicle(id, fields) {
   return rows[0] ?? null;
 }
 
-// Soft-delete: marks the vehicle as Removed instead of destroying the row
+// Delete: permanently removes the record
 async function deleteVehicle(id) {
   await pool.query(
-    `UPDATE subscriptions
-     SET status = 'Removed', updated_at = NOW()
-     WHERE id = $1`,
+    `DELETE FROM subscriptions WHERE id = $1`,
     [id]
   );
 }

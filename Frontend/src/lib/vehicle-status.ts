@@ -32,41 +32,40 @@ export function computeStatus(expiryDate: string | null | undefined, backendStat
 }
 
 /** 
- * Calculates debt based on full monthly plan increments that have PASSED.
- * If expired for 1 day, debt = 1 month.
- * If expired for 31 days, debt = 2 months.
+ * Calculates debt based on monthly increments.
  * 
- * NEW LOGIC: Debt only continues to accumulate while Trakzee is 'Active'.
- * If Trakzee is 'Deactivated', the debt is frozen at the deactivation date.
+ * NEW LOGIC: 
+ * 1. Debt accumulates while Trakzee is 'Active' past the expiry date.
+ * 2. Arrears are calculated by rounding up the number of months since expiry.
  */
 export function calculateOwed(
   expiryDate: string | null | undefined, 
   monthlyAmount: number, 
   trakzeeStatus: 'Active' | 'Deactivated' = 'Active',
-  updatedAt?: string | null
-): number {
+  referenceDate?: string | null): number {
   if (!expiryDate || !monthlyAmount) return 0;
 
   try {
-    // Per user request: if deactivated, they have no amount owed
+    // If Deactivated on Trakzee, they stop accruing debt (frozen)
     if (trakzeeStatus === 'Deactivated') return 0;
 
     const expiry = new Date(expiryDate);
     expiry.setHours(0, 0, 0, 0);
     
-    const endDate = new Date();
+    const endDate = referenceDate ? new Date(referenceDate) : new Date();
     endDate.setHours(0, 0, 0, 0);
     
-    if (expiry > endDate) return 0;
+    if (expiry >= endDate) return 0;
 
     const diffTime = endDate.getTime() - expiry.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    // Every 30 day period or fraction thereof is 1 month of debt
-    const debtMonths = Math.ceil(diffDays / 30) || 1;
+    // Calculate full and partial months. If even 1 day into a new month, charge full month price.
+    const monthsPast = Math.ceil(diffDays / 30);
+    const debt = monthsPast * monthlyAmount;
 
-    return debtMonths * monthlyAmount;
-  } catch (e) {
+    return Math.max(0, debt);
+  } catch {
     return 0;
   }
 }

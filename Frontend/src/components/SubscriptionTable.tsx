@@ -249,7 +249,7 @@ export default function SubscriptionTable() {
             {/* ── Table ── */}
             <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                    <Table className="min-w-[800px]">
+                    <Table className="min-w-200">
                         <TableHeader>
                             <TableRow className="bg-muted/30 hover:bg-muted/30">
                                 <ThCell field="customer_name" sortable {...thProps}>Customer Info</ThCell>
@@ -332,17 +332,20 @@ export default function SubscriptionTable() {
 
                                         {/* SMS Status */}
                                         <TableCell className="py-3.5">
-                                            {computedStatus === "Due Soon" ? (
-                                                <Badge variant="outline" className="text-[0.65rem] font-semibold px-2 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200">
-                                                    Sent
-                                                </Badge>
-                                            ) : (computedStatus === "Expired" || computedStatus === "Suspended") ? (
-                                                <Badge variant="outline" className="text-[0.65rem] font-semibold px-2 py-0.5 bg-red-50 text-red-700 border-red-200">
-                                                    Failed
-                                                </Badge>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground">—</span>
-                                            )}
+                                            <div className="flex flex-col gap-1">
+                                                {sub.sms_status === 'Sent' ? (
+                                                    <Badge variant="outline" className="text-[0.65rem] font-semibold px-2 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-200 w-fit">✓ Sent</Badge>
+                                                ) : sub.sms_status === 'Failed' ? (
+                                                    <Badge variant="outline" className="text-[0.65rem] font-semibold px-2 py-0.5 bg-red-50 text-red-700 border-red-200 w-fit">✕ Failed</Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[0.65rem] font-semibold px-2 py-0.5 bg-zinc-50 text-zinc-500 border-zinc-200 w-fit">Pending</Badge>
+                                                )}
+                                                {sub.sms_sent_at && (
+                                                    <span className="text-[0.6rem] text-muted-foreground">
+                                                        {new Date(sub.sms_sent_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 );

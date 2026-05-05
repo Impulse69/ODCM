@@ -140,7 +140,7 @@ export default function IndividualProfile({ id, onClose }: IndividualProfileProp
                       <thead>
                         <tr className="bg-muted/50 border-b border-border">
                           <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Vehicle</th>
-                          <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground text-red-600">Arrears</th>
+                          <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-red-600">Arrears</th>
                           <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Trakzee</th>
                           <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Expiry</th>
                           <th className="px-4 py-2.5 text-left text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>

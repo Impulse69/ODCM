@@ -1,136 +1,132 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Search,
-  MoreHorizontal,
-  Check,
-  ChevronsUpDown,
-  Loader2,
   AlertCircle,
-  Plus,
+  Camera,
   ChevronLeft,
   ChevronRight,
-  Package,
-  Camera,
+  Loader2,
   MapPin,
+  MoreHorizontal,
+  Package,
+  Plus,
+  Search,
   Settings2,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  getInventoryCategories,
-  addInventoryCategory,
-  removeInventoryCategory,
-  getInventoryTypes,
-  addInventoryType,
-  removeInventoryType,
-  getInventoryItems,
-  addInventoryItem,
-  editInventoryItem,
-  removeInventoryItem,
-  recordInventoryUsage,
-  getInventoryUsageHistory,
-  type InventoryItem,
-  type InventoryCategory,
-  type InventoryUsage,
-  type InventoryType,
-} from "@/lib/inventory-api";
+import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import {
+  addInventoryCategory,
+  addInventoryItem,
+  addInventoryType,
+  editInventoryItem,
+  getInventoryCategories,
+  getInventoryItems,
+  getInventoryTypes,
+  getInventoryTypesByCategory,
+  getInventoryUsageHistory,
+  recordInventoryUsage,
+  removeInventoryCategory,
+  removeInventoryItem,
+  removeInventoryType,
+  type InventoryCategory,
+  type InventoryItem,
+  type InventoryType,
+  type InventoryUsage,
+} from "@/lib/inventory-api";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 10;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", {
-    day: "2-digit", month: "short", year: "numeric",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 }
 
-const emptyItemForm = {
-  id: null as number | null,
-  category: "",
-  imei_number: "",
-  type: "",
-  quantity: "1",
+function getCategoryStyle(categoryName: string) {
+  const normalized = categoryName.toLowerCase();
+  if (normalized.includes("tracker")) return { icon: MapPin, bg: "bg-emerald-500/10", text: "text-emerald-600" };
+  if (normalized.includes("camera")) return { icon: Camera, bg: "bg-blue-500/10", text: "text-blue-600" };
+  return { icon: Package, bg: "bg-primary/10", text: "text-primary" };
+}
+
+type ItemFormState = {
+  id: number | null;
+  category: string;
+  type: string;
+  imei_number: string;
 };
 
-const emptyUseForm = {
-  inventory_id: null as number | null,
+type UsageFormState = {
+  inventory_id: number | null;
+  category: string;
+  type: string;
+  imei_number: string;
+  installed_by: string;
+  client_name: string;
+  vehicle_number: string;
+  location: string;
+};
+
+const emptyItemForm: ItemFormState = {
+  id: null,
   category: "",
-  imei_number: "",
   type: "",
+  imei_number: "",
+};
+
+const emptyUsageForm: UsageFormState = {
+  inventory_id: null,
+  category: "",
+  type: "",
+  imei_number: "",
   installed_by: "",
-  quantity_used: "1",
+  client_name: "",
+  vehicle_number: "",
+  location: "",
 };
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function InventoryView() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"stock" | "usage">("stock");
-
-  // Data
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [types, setTypes] = useState<InventoryType[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [usageHistory, setUsageHistory] = useState<InventoryUsage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Searches & Pagination
   const [stockSearch, setStockSearch] = useState("");
   const [usageSearch, setUsageSearch] = useState("");
   const [stockPage, setStockPage] = useState(1);
   const [usagePage, setUsagePage] = useState(1);
-  const PAGE_SIZE = 10;
-
-  // Modals
+  const [showManage, setShowManage] = useState(false);
   const [showItemForm, setShowItemForm] = useState(false);
-  const [itemForm, setItemForm] = useState(emptyItemForm);
+  const [showUsageForm, setShowUsageForm] = useState(false);
+  const [itemForm, setItemForm] = useState<ItemFormState>(emptyItemForm);
+  const [usageForm, setUsageForm] = useState<UsageFormState>(emptyUsageForm);
   const [savingItem, setSavingItem] = useState(false);
-
-  const [showUseForm, setShowUseForm] = useState(false);
-  const [useForm, setUseForm] = useState(emptyUseForm);
   const [savingUsage, setSavingUsage] = useState(false);
-
-  // Category dropdown state
-  const [catOpen, setCatOpen] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
-  const [creatingCat, setCreatingCat] = useState(false);
-
-  const [showManagement, setShowManagement] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
   const [newTypeName, setNewTypeName] = useState("");
-  const [typeCatSelect, setTypeCatSelect] = useState("");
-
-  // IMEI Dropdown state
-  const [imeiOpen, setImeiOpen] = useState(false);
-  const [imeiSearch, setImeiSearch] = useState("");
-
-  // Delete Confirm
+  const [typeCategory, setTypeCategory] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [creatingType, setCreatingType] = useState(false);
+  const [availableUsageTypes, setAvailableUsageTypes] = useState<InventoryType[]>([]);
+  const [availableUsageItems, setAvailableUsageItems] = useState<InventoryItem[]>([]);
+  const [loadingUsageChoices, setLoadingUsageChoices] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
-  // ─── Fetching ────────────────────────────────────────────────────────────────
+  const defaultInstallerName = user?.name?.trim() || "";
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -157,65 +153,138 @@ export default function InventoryView() {
     fetchData();
   }, [fetchData]);
 
-  // ─── Filters & Derived ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const loadChoices = async () => {
+      if (!usageForm.category) {
+        setAvailableUsageTypes([]);
+        setAvailableUsageItems([]);
+        return;
+      }
+
+      setLoadingUsageChoices(true);
+      try {
+        const nextTypes = await getInventoryTypesByCategory(usageForm.category);
+        setAvailableUsageTypes(nextTypes);
+        if (usageForm.type) {
+          const nextItems = await getInventoryItems({ category: usageForm.category, type: usageForm.type });
+          setAvailableUsageItems(nextItems);
+        } else {
+          setAvailableUsageItems([]);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load inventory choices");
+      } finally {
+        setLoadingUsageChoices(false);
+      }
+    };
+
+    loadChoices();
+  }, [usageForm.category, usageForm.type]);
 
   const filteredStock = useMemo(() => {
-    const q = stockSearch.toLowerCase();
-    return items.filter(
-      (i) =>
-        !q ||
-        i.imei_number.toLowerCase().includes(q) ||
-        i.type.toLowerCase().includes(q) ||
-        i.category.toLowerCase().includes(q)
-    );
+    const query = stockSearch.toLowerCase();
+    return items.filter((item) => {
+      if (!query) return true;
+      return [item.category, item.type, item.imei_number].some((value) => value.toLowerCase().includes(query));
+    });
   }, [items, stockSearch]);
 
   const filteredUsage = useMemo(() => {
-    const q = usageSearch.toLowerCase();
-    return usageHistory.filter(
-      (u) =>
-        !q ||
-        u.imei_number.toLowerCase().includes(q) ||
-        u.type.toLowerCase().includes(q) ||
-        u.installed_by.toLowerCase().includes(q) ||
-        u.category.toLowerCase().includes(q)
-    );
+    const query = usageSearch.toLowerCase();
+    return usageHistory.filter((item) => {
+      if (!query) return true;
+      return [item.category, item.type, item.imei_number, item.installed_by, item.client_name, item.vehicle_number, item.location].some((value) => value.toLowerCase().includes(query));
+    });
   }, [usageHistory, usageSearch]);
 
-  // Removed unused trackersCount and camerasCount
+  const itemTypes = useMemo(() => {
+    if (!itemForm.category) return [];
+    return types.filter((type) => type.category_name === itemForm.category);
+  }, [itemForm.category, types]);
 
-  // ─── Save Item ───────────────────────────────────────────────────────────────
+  const typeCards = useMemo(() => {
+    return types.map((type) => ({
+      ...type,
+      count: items.filter((item) => item.type === type.name).length,
+      style: getCategoryStyle(type.category_name),
+    }));
+  }, [items, types]);
+
+  const handleCreateCategory = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newCategory.trim()) return;
+    setCreatingCategory(true);
+    try {
+      const created = await addInventoryCategory(newCategory.trim());
+      setCategories((prev) => [...prev, created]);
+      setNewCategory("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create category");
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
+  const handleCreateType = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!typeCategory || !newTypeName.trim()) return;
+    setCreatingType(true);
+    try {
+      const created = await addInventoryType(typeCategory, newTypeName.trim());
+      setTypes((prev) => [...prev, created]);
+      setNewTypeName("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create type");
+    } finally {
+      setCreatingType(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: number) => {
+    try {
+      await removeInventoryCategory(id);
+      setCategories((prev) => prev.filter((category) => category.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete category");
+    }
+  };
+
+  const handleDeleteType = async (id: number) => {
+    try {
+      await removeInventoryType(id);
+      setTypes((prev) => prev.filter((type) => type.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete type");
+    }
+  };
 
   const handleSaveItem = async () => {
-    if (!itemForm.category || !itemForm.imei_number || !itemForm.type) {
-      setError("Please fill all item fields");
+    if (!itemForm.category || !itemForm.type || !itemForm.imei_number.trim()) {
+      setError("Please fill category, type and IMEI.");
       return;
     }
-    // IMEI must be unique
-    if (items.some(i => i.imei_number === itemForm.imei_number && i.id !== itemForm.id)) {
-      setError("IMEI number must be unique for each item.");
-      return;
-    }
+
     setSavingItem(true);
     setError(null);
     try {
       if (itemForm.id) {
         await editInventoryItem(itemForm.id, {
           category: itemForm.category,
-          imei_number: itemForm.imei_number,
           type: itemForm.type,
-          quantity: 1,
+          imei_number: itemForm.imei_number.trim(),
         });
       } else {
         await addInventoryItem({
           category: itemForm.category,
-          imei_number: itemForm.imei_number,
           type: itemForm.type,
+          imei_number: itemForm.imei_number.trim(),
           quantity: 1,
         });
       }
+
       setShowItemForm(false);
-      fetchData();
+      setItemForm(emptyItemForm);
+      await fetchData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save item");
     } finally {
@@ -223,99 +292,39 @@ export default function InventoryView() {
     }
   };
 
-  // ─── Management ──────────────────────────────────────────────────────────────
-
-  const handleCreateCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCatName.trim()) return;
-    setCreatingCat(true);
-    try {
-      const cat = await addInventoryCategory(newCatName.trim());
-      setCategories([...categories, cat]);
-      setNewCatName("");
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setCreatingCat(false);
-    }
-  };
-
-  const handleRemoveCategory = async (id: number) => {
-    try {
-      await removeInventoryCategory(id);
-      setCategories(categories.filter(c => c.id !== id));
-      // Also clean up any types for this category
-      const cat = categories.find(c => c.id === id);
-      if (cat) setTypes(types.filter(t => t.category_name !== cat.name));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleCreateType = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTypeName.trim() || !typeCatSelect) return;
-    try {
-      const type = await addInventoryType(typeCatSelect, newTypeName.trim());
-      setTypes([...types, type]);
-      setNewTypeName("");
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleRemoveType = async (id: number) => {
-    try {
-      await removeInventoryType(id);
-      setTypes(types.filter(t => t.id !== id));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // ─── Delete Item ─────────────────────────────────────────────────────────────
-
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await removeInventoryItem(deleteTarget);
-      setItems((prev) => prev.filter(i => i.id !== deleteTarget));
-    } catch {
-       // silent
-    } finally {
-      setDeleteTarget(null);
-    }
-  };
-
-  // ─── Record Usage ────────────────────────────────────────────────────────────
-
-  const handleOpenUseForm = (item?: InventoryItem) => {
+  const handleOpenUsageForm = async (item?: InventoryItem) => {
     if (item) {
-      // Pre-fill from table row
-      setUseForm({
+      setUsageForm({
         inventory_id: item.id,
         category: item.category,
-        imei_number: item.imei_number,
         type: item.type,
-        installed_by: "",
-        quantity_used: "1",
+        imei_number: item.imei_number,
+        installed_by: defaultInstallerName,
+        client_name: "",
+        vehicle_number: "",
+        location: "",
       });
+      try {
+        const nextTypes = await getInventoryTypesByCategory(item.category);
+        setAvailableUsageTypes(nextTypes);
+        const nextItems = await getInventoryItems({ category: item.category, type: item.type });
+        setAvailableUsageItems(nextItems);
+      } catch {
+        setAvailableUsageTypes([]);
+        setAvailableUsageItems([]);
+      }
     } else {
-      // Empty form
-      setUseForm(emptyUseForm);
+      setUsageForm({ ...emptyUsageForm, installed_by: defaultInstallerName });
+      setAvailableUsageTypes([]);
+      setAvailableUsageItems([]);
     }
-    setError(null);
-    setShowUseForm(true);
+
+    setShowUsageForm(true);
   };
 
-  const handleRecordUsage = async () => {
-    if (!useForm.inventory_id || !useForm.installed_by || !useForm.quantity_used) {
-      setError("Please fill all required usage fields");
-      return;
-    }
-    const qty = parseInt(useForm.quantity_used);
-    if (isNaN(qty) || qty <= 0) {
-      setError("Quantity must be greater than 0");
+  const handleSaveUsage = async () => {
+    if (!usageForm.inventory_id || !usageForm.installed_by.trim() || !usageForm.client_name.trim() || !usageForm.vehicle_number.trim() || !usageForm.location.trim()) {
+      setError("Please select an IMEI and enter installer, client, vehicle number, and location.");
       return;
     }
 
@@ -323,12 +332,15 @@ export default function InventoryView() {
     setError(null);
     try {
       await recordInventoryUsage({
-        inventory_id: useForm.inventory_id,
-        installed_by: useForm.installed_by,
-        quantity_used: qty,
+        inventory_id: usageForm.inventory_id,
+        installed_by: usageForm.installed_by.trim(),
+        client_name: usageForm.client_name.trim(),
+        vehicle_number: usageForm.vehicle_number.trim(),
+        location: usageForm.location.trim(),
       });
-      setShowUseForm(false);
-      fetchData(); // Refresh both stock and history
+      setShowUsageForm(false);
+      setUsageForm({ ...emptyUsageForm, installed_by: defaultInstallerName });
+      await fetchData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to record usage");
     } finally {
@@ -336,78 +348,91 @@ export default function InventoryView() {
     }
   };
 
-  // ─── Render Stock Table ──────────────────────────────────────────────────────
-  const renderStockTable = () => {
+  const handleDeleteItem = async () => {
+    if (!deleteTarget) return;
+    try {
+      await removeInventoryItem(deleteTarget);
+      setItems((prev) => prev.filter((item) => item.id !== deleteTarget));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete item");
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
+  const renderStock = () => {
     const totalPages = Math.max(1, Math.ceil(filteredStock.length / PAGE_SIZE));
-    const pageData = filteredStock.slice((stockPage - 1) * PAGE_SIZE, stockPage * PAGE_SIZE);
+    const pageItems = filteredStock.slice((stockPage - 1) * PAGE_SIZE, stockPage * PAGE_SIZE);
 
     return (
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_1fr_40px] gap-3 px-6 py-3 border-b border-border bg-muted/30">
-          {["CATEGORY", "IMEI NUMBER", "TYPE", "STOCK", "DATE ADDED", ""].map((col) => (
-            <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
+        <div className="hidden sm:grid grid-cols-[1fr_1.2fr_1.6fr_1fr_40px] gap-3 px-6 py-3 border-b border-border bg-muted/30">
+          {["CATEGORY", "TYPE", "IMEI NUMBER", "DATE ADDED", ""].map((column) => (
+            <span key={column} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{column}</span>
           ))}
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={18} className="animate-spin mr-2" /> Loading inventory…</div>
-        ) : pageData.length === 0 ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground">
+            <Loader2 size={18} className="animate-spin mr-2" /> Loading inventory…
+          </div>
+        ) : pageItems.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">No items in stock.</div>
         ) : (
           <div className="divide-y divide-border">
-            {pageData.map(item => {
-              const itemActions = (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground"><MoreHorizontal size={15} /></Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem className="text-xs cursor-pointer text-blue-600 focus:text-blue-600" onClick={() => handleOpenUseForm(item)} disabled={item.quantity <= 0}>Use Item</DropdownMenuItem>
-                    <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => { setItemForm({ ...item, quantity: String(item.quantity) }); setShowItemForm(true); }}>Edit</DropdownMenuItem>
-                    <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => setDeleteTarget(item.id)}>Delete</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
+            {pageItems.map((item) => {
+              const style = getCategoryStyle(item.category);
+              const Icon = style.icon;
+
               return (
-              <div key={item.id} className="hover:bg-muted/30 transition-colors">
-                {/* Desktop */}
-                <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1.5fr_0.8fr_1fr_40px] gap-3 items-center px-6 py-4">
-                  <Badge variant="outline" className="w-fit bg-secondary text-secondary-foreground">{item.category}</Badge>
-                  <span className="font-mono text-sm">{item.imei_number}</span>
-                  <span className="font-medium text-sm">{item.type}</span>
-                  <span className={cn("font-bold text-sm", item.quantity === 0 ? "text-destructive" : "text-emerald-600")}>{item.quantity}</span>
-                  <span className="text-sm text-muted-foreground">{formatDate(item.created_at)}</span>
-                  {itemActions}
-                </div>
-                {/* Mobile */}
-                <div className="sm:hidden px-4 py-3 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{item.type}</p>
-                      <p className="font-mono text-xs text-muted-foreground truncate">{item.imei_number}</p>
+                <div key={item.id} className="hover:bg-muted/30 transition-colors">
+                  <div className="hidden sm:grid grid-cols-[1fr_1.2fr_1.6fr_1fr_40px] gap-3 items-center px-6 py-4">
+                    <Badge variant="outline" className="w-fit bg-secondary text-secondary-foreground">{item.category}</Badge>
+                    <span className="font-medium text-sm flex items-center gap-2"><Icon size={14} className={style.text} />{item.type}</span>
+                    <span className="font-mono text-sm">{item.imei_number}</span>
+                    <span className="text-sm text-muted-foreground">{formatDate(item.created_at)}</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground"><MoreHorizontal size={15} /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem className="text-xs cursor-pointer text-blue-600 focus:text-blue-600" onClick={() => handleOpenUsageForm(item)}>Use Item</DropdownMenuItem>
+                        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => { setItemForm({ id: item.id, category: item.category, type: item.type, imei_number: item.imei_number }); setShowItemForm(true); }}>Edit</DropdownMenuItem>
+                        <DropdownMenuItem className="text-xs cursor-pointer text-destructive focus:text-destructive" onClick={() => setDeleteTarget(item.id)}>Delete</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <div className="sm:hidden px-4 py-3 space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{item.type}</p>
+                        <p className="font-mono text-xs text-muted-foreground truncate">{item.imei_number}</p>
+                      </div>
+                      <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground" onClick={() => handleOpenUsageForm(item)}>
+                        <MoreHorizontal size={15} />
+                      </Button>
                     </div>
-                    {itemActions}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <Badge variant="outline" className="text-[0.65rem] bg-secondary text-secondary-foreground">{item.category}</Badge>
-                    <span className={cn("font-bold", item.quantity === 0 ? "text-destructive" : "text-emerald-600")}>Stock: {item.quantity}</span>
-                    <span className="text-muted-foreground ml-auto">{formatDate(item.created_at)}</span>
+                    <div className="flex items-center gap-2 text-xs">
+                      <Badge variant="outline" className="text-[0.65rem] bg-secondary text-secondary-foreground">{item.category}</Badge>
+                      <span className="text-muted-foreground ml-auto">{formatDate(item.created_at)}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
               );
             })}
           </div>
         )}
+
         {!loading && filteredStock.length > 0 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-border">
             <p className="text-xs text-muted-foreground">
               Showing {Math.min((stockPage - 1) * PAGE_SIZE + 1, filteredStock.length)} to {Math.min(stockPage * PAGE_SIZE, filteredStock.length)} of {filteredStock.length}
             </p>
             <div className="flex items-center gap-1">
-              <button disabled={stockPage === 1} onClick={() => setStockPage(p => p - 1)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border disabled:opacity-40 hover:bg-muted/50"><ChevronLeft size={14}/></button>
+              <button disabled={stockPage === 1} onClick={() => setStockPage((page) => page - 1)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border disabled:opacity-40 hover:bg-muted/50"><ChevronLeft size={14} /></button>
               <span className="text-xs font-semibold px-2">{stockPage} / {totalPages}</span>
-              <button disabled={stockPage === totalPages} onClick={() => setStockPage(p => p + 1)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border disabled:opacity-40 hover:bg-muted/50"><ChevronRight size={14}/></button>
+              <button disabled={stockPage === totalPages} onClick={() => setStockPage((page) => page + 1)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border disabled:opacity-40 hover:bg-muted/50"><ChevronRight size={14} /></button>
             </div>
           </div>
         )}
@@ -415,62 +440,67 @@ export default function InventoryView() {
     );
   };
 
-  // ─── Render Usage Table ──────────────────────────────────────────────────────
-  const renderUsageTable = () => {
+  const renderUsage = () => {
     const totalPages = Math.max(1, Math.ceil(filteredUsage.length / PAGE_SIZE));
-    const pageData = filteredUsage.slice((usagePage - 1) * PAGE_SIZE, usagePage * PAGE_SIZE);
+    const pageItems = filteredUsage.slice((usagePage - 1) * PAGE_SIZE, usagePage * PAGE_SIZE);
 
     return (
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1fr_1.5fr_0.8fr_1fr] gap-3 px-6 py-3 border-b border-border bg-muted/30">
-          {["CATEGORY", "IMEI NUMBER", "TYPE", "INSTALLED BY", "QTY", "DATE USED"].map((col) => (
-            <span key={col} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{col}</span>
+        <div className="hidden sm:grid grid-cols-[0.85fr_1.1fr_1fr_1fr_0.9fr_1fr_1fr_0.85fr] gap-3 px-6 py-3 border-b border-border bg-muted/30">
+          {["CATEGORY", "IMEI NUMBER", "TYPE", "CLIENT", "VEHICLE", "LOCATION", "INSTALLED BY", "DATE USED"].map((column) => (
+            <span key={column} className="text-[0.6rem] font-bold uppercase tracking-widest text-muted-foreground">{column}</span>
           ))}
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 size={18} className="animate-spin mr-2" /> Loading history…</div>
-        ) : pageData.length === 0 ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground">
+            <Loader2 size={18} className="animate-spin mr-2" /> Loading history…
+          </div>
+        ) : pageItems.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">No usage history found.</div>
         ) : (
           <div className="divide-y divide-border">
-            {pageData.map(u => (
-              <div key={u.id} className="hover:bg-muted/30 transition-colors">
-                {/* Desktop */}
-                <div className="hidden sm:grid grid-cols-[1fr_1.5fr_1fr_1.5fr_0.8fr_1fr] gap-3 items-center px-6 py-4">
-                  <Badge variant="outline" className="w-fit">{u.category}</Badge>
-                  <span className="font-mono text-sm text-muted-foreground truncate">{u.imei_number}</span>
-                  <span className="text-sm font-medium truncate">{u.type}</span>
-                  <span className="text-sm font-semibold truncate text-foreground">{u.installed_by}</span>
-                  <span className="font-bold text-sm text-amber-600">-{u.quantity_used}</span>
-                  <span className="text-sm text-muted-foreground">{formatDate(u.used_at)}</span>
+            {pageItems.map((entry) => (
+              <div key={entry.id} className="hover:bg-muted/30 transition-colors">
+                <div className="hidden sm:grid grid-cols-[0.85fr_1.1fr_1fr_1fr_0.9fr_1fr_1fr_0.85fr] gap-3 items-center px-6 py-4">
+                  <Badge variant="outline" className="w-fit">{entry.category}</Badge>
+                  <span className="font-mono text-sm text-muted-foreground truncate">{entry.imei_number}</span>
+                  <span className="text-sm font-medium truncate">{entry.type}</span>
+                  <span className="text-sm truncate">{entry.client_name}</span>
+                  <span className="text-sm truncate">{entry.vehicle_number}</span>
+                  <span className="text-sm truncate">{entry.location}</span>
+                  <span className="text-sm font-semibold truncate text-foreground">{entry.installed_by}</span>
+                  <span className="text-sm text-muted-foreground">{formatDate(entry.used_at)}</span>
                 </div>
-                {/* Mobile */}
+
                 <div className="sm:hidden px-4 py-3 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-sm">{u.type}</p>
-                    <span className="font-bold text-sm text-amber-600">-{u.quantity_used}</span>
+                    <p className="font-medium text-sm">{entry.type}</p>
+                    <span className="text-xs text-muted-foreground">{formatDate(entry.used_at)}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs">
-                    <Badge variant="outline" className="text-[0.65rem]">{u.category}</Badge>
-                    <span className="text-muted-foreground truncate">{u.installed_by}</span>
-                    <span className="text-muted-foreground ml-auto">{formatDate(u.used_at)}</span>
+                    <Badge variant="outline" className="text-[0.65rem]">{entry.category}</Badge>
+                    <span className="text-muted-foreground truncate">{entry.vehicle_number}</span>
                   </div>
-                  <p className="font-mono text-xs text-muted-foreground truncate">{u.imei_number}</p>
+                  <p className="text-xs text-muted-foreground truncate">Client: {entry.client_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">Location: {entry.location}</p>
+                  <p className="text-xs text-muted-foreground truncate">Installed by: {entry.installed_by}</p>
+                  <p className="font-mono text-xs text-muted-foreground truncate">{entry.imei_number}</p>
                 </div>
               </div>
             ))}
           </div>
         )}
+
         {!loading && filteredUsage.length > 0 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-border">
             <p className="text-xs text-muted-foreground">
               Showing {Math.min((usagePage - 1) * PAGE_SIZE + 1, filteredUsage.length)} to {Math.min(usagePage * PAGE_SIZE, filteredUsage.length)} of {filteredUsage.length}
             </p>
             <div className="flex items-center gap-1">
-              <button disabled={usagePage === 1} onClick={() => setUsagePage(p => p - 1)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border disabled:opacity-40 hover:bg-muted/50"><ChevronLeft size={14}/></button>
+              <button disabled={usagePage === 1} onClick={() => setUsagePage((page) => page - 1)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border disabled:opacity-40 hover:bg-muted/50"><ChevronLeft size={14} /></button>
               <span className="text-xs font-semibold px-2">{usagePage} / {totalPages}</span>
-              <button disabled={usagePage === totalPages} onClick={() => setUsagePage(p => p + 1)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border disabled:opacity-40 hover:bg-muted/50"><ChevronRight size={14}/></button>
+              <button disabled={usagePage === totalPages} onClick={() => setUsagePage((page) => page + 1)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border disabled:opacity-40 hover:bg-muted/50"><ChevronRight size={14} /></button>
             </div>
           </div>
         )}
@@ -481,98 +511,63 @@ export default function InventoryView() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Inventory Management</h1>
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Inventory Management</h1>
+          <p className="text-sm text-muted-foreground mt-1">Current stock and usage history are tracked in separate sections.</p>
+        </div>
         <div className="flex gap-2">
-           <Button variant="outline" size="sm" onClick={() => setShowManagement(true)}>
+          <Button variant="outline" size="sm" onClick={() => setShowManage(true)}>
             <Settings2 size={15} className="mr-2" /> Manage
           </Button>
           {activeTab === "stock" ? (
-             <Button size="sm" className="bg-odg-orange text-white hover:brightness-95" onClick={() => { setItemForm(emptyItemForm); setShowItemForm(true); }}>
+            <Button size="sm" className="bg-odg-orange text-white hover:brightness-95" onClick={() => { setItemForm(emptyItemForm); setShowItemForm(true); }}>
               <Plus size={15} className="mr-2" /> Add Item
             </Button>
           ) : (
-            <Button size="sm" className="bg-odg-orange text-white hover:brightness-95" onClick={() => handleOpenUseForm()}>
+            <Button size="sm" className="bg-odg-orange text-white hover:brightness-95" onClick={() => handleOpenUsageForm()}>
               <Plus size={15} className="mr-2" /> Record Usage
             </Button>
           )}
         </div>
       </div>
 
-      {/* ── KPIs (Only on stock tab) ── */}
-      {activeTab === "stock" && (
-        <div className="flex flex-wrap gap-3">
-          {/* Total Stock Card */}
-          <div className="bg-card border border-border rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 min-w-40">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-              <Package size={16} />
-            </div>
-            <div>
-              <p className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">Total Stock</p>
-              <p className="text-lg font-extrabold text-foreground leading-tight">
-                {items.reduce((sum, i) => sum + i.quantity, 0)}
-              </p>
-            </div>
+      <div className="flex flex-wrap gap-3">
+        <div className="bg-card border border-border rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 min-w-40">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0"><Package size={16} /></div>
+          <div>
+            <p className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground">Total Stock</p>
+            <p className="text-lg font-extrabold text-foreground leading-tight">{items.length}</p>
           </div>
-
-          {/* Dynamic Type Cards */}
-          {types.map((type) => {
-            const count = items
-              .filter(i => i.type === type.name)
-              .reduce((sum, i) => sum + i.quantity, 0);
-            
-            // Assign icons based on category
-            let Icon = Package;
-            let bgColor = "bg-primary/10";
-            let textColor = "text-primary";
-
-            if (type.category_name.toLowerCase().includes("tracker")) {
-              Icon = MapPin;
-              bgColor = "bg-emerald-500/10";
-              textColor = "text-emerald-600";
-            } else if (type.category_name.toLowerCase().includes("camera")) {
-              Icon = Camera;
-              bgColor = "bg-blue-500/10";
-              textColor = "text-blue-600";
-            }
-
-            return (
-              <div key={type.id} className="bg-card border border-border rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 min-w-35">
-                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", bgColor, textColor)}>
-                  <Icon size={16} />
-                </div>
-                <div>
-                  <p className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground truncate max-w-25">{type.name}</p>
-                  <p className="text-lg font-extrabold text-foreground leading-tight">{count}</p>
-                </div>
-              </div>
-            );
-          })}
         </div>
-      )}
 
-      {/* ── Tabs & Search ── */}
+        {typeCards.map((type) => {
+          const Icon = type.style.icon;
+          return (
+            <div key={type.id} className="bg-card border border-border rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 min-w-35">
+              <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", type.style.bg, type.style.text)}>
+                <Icon size={16} />
+              </div>
+              <div>
+                <p className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground truncate max-w-25">{type.name}</p>
+                <p className="text-lg font-extrabold text-foreground leading-tight">{type.count}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center bg-muted/50 p-1 rounded-xl border border-border text-sm">
-          <button
-            onClick={() => setActiveTab("stock")}
-            className={cn("px-5 py-1.5 rounded-lg font-medium transition-colors", activeTab === "stock" ? "bg-odg-orange text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}
-          >
-            Current Stock
-          </button>
-          <button
-            onClick={() => setActiveTab("usage")}
-            className={cn("px-5 py-1.5 rounded-lg font-medium transition-colors", activeTab === "usage" ? "bg-odg-orange text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}
-          >
-            Usage History
-          </button>
+          <button onClick={() => setActiveTab("stock")} className={cn("px-5 py-1.5 rounded-lg font-medium transition-colors", activeTab === "stock" ? "bg-odg-orange text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}>Current Stock</button>
+          <button onClick={() => setActiveTab("usage")} className={cn("px-5 py-1.5 rounded-lg font-medium transition-colors", activeTab === "usage" ? "bg-odg-orange text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}>Usage History</button>
         </div>
 
         <div className="relative w-full sm:w-72">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             value={activeTab === "stock" ? stockSearch : usageSearch}
-            onChange={(e) => activeTab === "stock" ? setStockSearch(e.target.value) : setUsageSearch(e.target.value)}
-            placeholder="Search by IMEI, Type..."
+            onChange={(event) => activeTab === "stock" ? setStockSearch(event.target.value) : setUsageSearch(event.target.value)}
+            placeholder="Search by IMEI, type or category"
             className="w-full pl-9 pr-4 h-9 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
@@ -584,270 +579,256 @@ export default function InventoryView() {
         </div>
       )}
 
-      {/* ── Content ── */}
-      {activeTab === "stock" ? renderStockTable() : renderUsageTable()}
+      {activeTab === "stock" ? renderStock() : renderUsage()}
 
-      {/* ── Modals ── */}
-      
-      {/* 1. Add / Edit Stock Item */}
       <Dialog open={showItemForm} onOpenChange={setShowItemForm}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{itemForm.id ? "Edit Item" : "Add Inventory Item"}</DialogTitle>
-            <DialogDescription>Enter the device details to add it to stock.</DialogDescription>
+            <DialogDescription>Choose a category, then its type, then enter the IMEI.</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
             <div className="space-y-1.5">
               <Label className="text-xs">Category</Label>
-              <Popover open={catOpen} onOpenChange={setCatOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" aria-expanded={catOpen} className="w-full justify-between font-normal">
-                    {itemForm.category || "Select a category..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <div className="max-h-48 overflow-y-auto p-1">
-                    {categories.map(c => (
-                      <div
-                        key={c.id}
-                        className="flex cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                        onClick={() => { setItemForm({...itemForm, category: c.name}); setCatOpen(false); }}
-                      >
-                        <Check className={cn("mr-2 h-4 w-4", itemForm.category === c.name ? "opacity-100" : "opacity-0")} />
-                        {c.name}
-                      </div>
-                    ))}
-                    {categories.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">No categories yet.</div>}
-                  </div>
-                  <div className="border-t p-2">
-                    <form onSubmit={handleCreateCategory} className="flex gap-2">
-                      <Input
-                        placeholder="New category..."
-                        value={newCatName}
-                        onChange={e => setNewCatName(e.target.value)}
-                        className="h-8 text-xs"
-                      />
-                      <Button type="submit" size="sm" disabled={creatingCat || !newCatName.trim()} className="h-8 text-xs">
-                        {creatingCat ? <Loader2 size={12} className="animate-spin" /> : "Add"}
-                      </Button>
-                    </form>
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <select
+                value={itemForm.category}
+                onChange={(event) => setItemForm((prev) => ({ ...prev, category: event.target.value, type: "" }))}
+                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm"
+              >
+                <option value="">Select a category</option>
+                {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
+              </select>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">IMEI Number</Label>
-              <Input placeholder="e.g. 356938035643809" value={itemForm.imei_number} onChange={e => setItemForm({...itemForm, imei_number: e.target.value})} />
+              <Label className="text-xs">Type</Label>
+              <select
+                value={itemForm.type}
+                onChange={(event) => setItemForm((prev) => ({ ...prev, type: event.target.value }))}
+                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm"
+                disabled={!itemForm.category}
+              >
+                <option value="">{itemForm.category ? "Select a type" : "Choose a category first"}</option>
+                {itemTypes.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
+              </select>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Device Type / Model</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between font-normal">
-                    {itemForm.type || "Select a type..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <div className="max-h-48 overflow-y-auto p-1">
-                    {types.filter(t => !itemForm.category || t.category_name === itemForm.category).map(t => (
-                      <div
-                        key={t.id}
-                        className="flex cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                        onClick={() => setItemForm({...itemForm, type: t.name, category: t.category_name})}
-                      >
-                        <Check className={cn("mr-2 h-4 w-4", itemForm.type === t.name ? "opacity-100" : "opacity-0")} />
-                        <div className="flex flex-col">
-                          <span className="font-medium">{t.name}</span>
-                          <span className="text-[0.65rem] text-muted-foreground">{t.category_name}</span>
-                        </div>
-                      </div>
-                    ))}
-                    {types.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">No types configured.</div>}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Label className="text-xs">IMEI</Label>
+              <Input value={itemForm.imei_number} onChange={(event) => setItemForm((prev) => ({ ...prev, imei_number: event.target.value }))} placeholder="Enter unique IMEI" />
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowItemForm(false)}>Cancel</Button>
-            <Button onClick={handleSaveItem} disabled={savingItem}>
-              {savingItem ? <Loader2 size={14} className="animate-spin mr-2" /> : "Save Item"}
+            <Button onClick={handleSaveItem} disabled={savingItem}>{savingItem ? <Loader2 size={14} className="animate-spin mr-2" /> : null}{itemForm.id ? "Save Changes" : "Add Item"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showUsageForm} onOpenChange={setShowUsageForm}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Record Stock Usage</DialogTitle>
+            <DialogDescription>Move items from current stock into history by filling in the details below.</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-tight text-muted-foreground font-bold">Category</Label>
+              <select
+                value={usageForm.category}
+                onChange={async (event) => {
+                  const category = event.target.value;
+                  setUsageForm({ ...emptyUsageForm, category, installed_by: defaultInstallerName });
+                  if (!category) return;
+                  try {
+                    const nextTypes = await getInventoryTypesByCategory(category);
+                    setAvailableUsageTypes(nextTypes);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to load types");
+                  }
+                }}
+                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+              >
+                <option value="">Select a category</option>
+                {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-tight text-muted-foreground font-bold">Type</Label>
+              <select
+                value={usageForm.type}
+                onChange={async (event) => {
+                  const type = event.target.value;
+                  setUsageForm((prev) => ({ ...prev, type, imei_number: "", inventory_id: null }));
+                  if (!usageForm.category || !type) {
+                    setAvailableUsageItems([]);
+                    return;
+                  }
+                  try {
+                    const nextItems = await getInventoryItems({ category: usageForm.category, type });
+                    setAvailableUsageItems(nextItems);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to load IMEIs");
+                  }
+                }}
+                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-odg-orange/30"
+                disabled={!usageForm.category || loadingUsageChoices}
+              >
+                <option value="">{loadingUsageChoices ? "Loading types..." : usageForm.category ? "Select a type" : "Choose a category first"}</option>
+                {availableUsageTypes.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs uppercase tracking-tight text-muted-foreground font-bold">IMEI / Serial Number</Label>
+              <select
+                value={usageForm.inventory_id ?? ""}
+                onChange={(event) => {
+                  const selectedId = Number(event.target.value);
+                  const selected = availableUsageItems.find((item) => item.id === selectedId);
+                  setUsageForm((prev) => ({
+                    ...prev,
+                    inventory_id: selected?.id ?? null,
+                    imei_number: selected?.imei_number ?? "",
+                  }));
+                }}
+                className="w-full h-10 rounded-lg border border-border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-odg-orange/30 font-mono"
+                disabled={!usageForm.type || loadingUsageChoices}
+              >
+                <option value="">{loadingUsageChoices ? "Loading IMEIs..." : usageForm.type ? "Select item from current stock" : "Choose a type first"}</option>
+                {availableUsageItems.map((item) => <option key={item.id} value={item.id}>{item.imei_number}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-tight text-muted-foreground font-bold">Client Name</Label>
+              <Input 
+                value={usageForm.client_name} 
+                onChange={(event) => setUsageForm((prev) => ({ ...prev, client_name: event.target.value }))} 
+                placeholder="Individual or Company" 
+                className="h-10 focus:ring-odg-orange/30"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-tight text-muted-foreground font-bold">Vehicle Number</Label>
+              <Input 
+                value={usageForm.vehicle_number} 
+                onChange={(event) => setUsageForm((prev) => ({ ...prev, vehicle_number: event.target.value }))} 
+                placeholder="e.g. GR-123-24" 
+                className="h-10 focus:ring-odg-orange/30"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-tight text-muted-foreground font-bold">Installed By</Label>
+              <Input 
+                value={usageForm.installed_by} 
+                onChange={(event) => setUsageForm((prev) => ({ ...prev, installed_by: event.target.value }))} 
+                placeholder="Technician name" 
+                className="h-10 focus:ring-odg-orange/30"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-tight text-muted-foreground font-bold">Location</Label>
+              <Input 
+                value={usageForm.location} 
+                onChange={(event) => setUsageForm((prev) => ({ ...prev, location: event.target.value }))} 
+                placeholder="City/Area" 
+                className="h-10 focus:ring-odg-orange/30"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => setShowUsageForm(false)} className="h-10">Cancel</Button>
+            <Button onClick={handleSaveUsage} disabled={savingUsage} className="bg-odg-orange text-white hover:brightness-95 h-10">
+              {savingUsage ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+              Archive to Usage
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 2. Record Usage Form */}
-      <Dialog open={showUseForm} onOpenChange={setShowUseForm}>
+      <Dialog open={showManage} onOpenChange={setShowManage}>
+        <DialogContent className="sm:max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Inventory Structure</DialogTitle>
+            <DialogDescription>Create or remove categories and types that drive the dependent selectors.</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-6 py-2 lg:grid-cols-2">
+            <div className="space-y-4">
+              <form onSubmit={handleCreateCategory} className="space-y-3 rounded-xl border border-border p-4">
+                <p className="text-sm font-semibold">Create Category</p>
+                <Input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="New category name" />
+                <Button type="submit" disabled={creatingCategory || !newCategory.trim()}>{creatingCategory ? <Loader2 size={14} className="animate-spin mr-2" /> : null}Add Category</Button>
+              </form>
+
+              <div className="rounded-xl border border-border p-4 space-y-3">
+                <p className="text-sm font-semibold">Categories</p>
+                <div className="space-y-2 max-h-52 overflow-y-auto">
+                  {categories.map((category) => (
+                    <div key={category.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                      <span className="text-sm">{category.name}</span>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDeleteCategory(category.id)}>
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <form onSubmit={handleCreateType} className="space-y-3 rounded-xl border border-border p-4">
+                <p className="text-sm font-semibold">Create Type</p>
+                <select value={typeCategory} onChange={(event) => setTypeCategory(event.target.value)} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm">
+                  <option value="">Select a category</option>
+                  {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
+                </select>
+                <Input value={newTypeName} onChange={(event) => setNewTypeName(event.target.value)} placeholder="New type name" />
+                <Button type="submit" disabled={creatingType || !typeCategory || !newTypeName.trim()}>{creatingType ? <Loader2 size={14} className="animate-spin mr-2" /> : null}Add Type</Button>
+              </form>
+
+              <div className="rounded-xl border border-border p-4 space-y-3">
+                <p className="text-sm font-semibold">Types</p>
+                <div className="space-y-2 max-h-52 overflow-y-auto">
+                  {types.map((type) => (
+                    <div key={type.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">{type.name}</p>
+                        <p className="text-xs text-muted-foreground">{type.category_name}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDeleteType(type.id)}>
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Record Usage</DialogTitle>
-            <DialogDescription>Select an item to use, specify who installed it, and the quantity.</DialogDescription>
+            <DialogTitle>Delete Inventory Item</DialogTitle>
+            <DialogDescription>This permanently removes the item from current stock.</DialogDescription>
           </DialogHeader>
-
-          <div className="grid gap-4 py-2">
-            <div className="space-y-1.5">
-               <Label className="text-xs">Item (Search by IMEI or Type)</Label>
-               <Popover open={imeiOpen} onOpenChange={setImeiOpen}>
-                 <PopoverTrigger asChild>
-                   <Button variant="outline" role="combobox" aria-expanded={imeiOpen} className="w-full justify-between font-normal">
-                     {useForm.imei_number ? `${useForm.imei_number} — ${useForm.type}` : "Select item..."}
-                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                   </Button>
-                 </PopoverTrigger>
-                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                   <div className="flex items-center border-b px-3">
-                     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                     <input
-                       placeholder="Search IMEI..."
-                       value={imeiSearch}
-                       onChange={e => setImeiSearch(e.target.value)}
-                       className="flex h-10 w-full rounded-md bg-transparent text-sm outline-none"
-                     />
-                   </div>
-                   <div className="max-h-48 overflow-y-auto p-1">
-                     {items.filter(i => i.quantity > 0 && (!imeiSearch || i.imei_number.toLowerCase().includes(imeiSearch.toLowerCase()) || i.type.toLowerCase().includes(imeiSearch.toLowerCase()))).map(i => (
-                       <div
-                         key={i.id}
-                         className="flex cursor-pointer flex-col rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                         onClick={() => {
-                           setUseForm({ ...useForm, inventory_id: i.id, category: i.category, imei_number: i.imei_number, type: i.type, quantity_used: "1" });
-                           setImeiOpen(false);
-                         }}
-                       >
-                         <span className="font-semibold">{i.imei_number}</span>
-                         <span className="text-xs text-muted-foreground">{i.type} <span className="text-primary font-medium ml-2">Stock: {i.quantity}</span></span>
-                       </div>
-                     ))}
-                   </div>
-                 </PopoverContent>
-               </Popover>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Installed By</Label>
-              <Input placeholder="Enter name..." value={useForm.installed_by} onChange={e => setUseForm({...useForm, installed_by: e.target.value})} />
-            </div>
-
-            <div className="space-y-1.5 w-1/2">
-              <Label className="text-xs">Quantity Used</Label>
-              <Input type="number" min="1" value={useForm.quantity_used} onChange={e => setUseForm({...useForm, quantity_used: e.target.value})} />
-            </div>
-          </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUseForm(false)}>Cancel</Button>
-            <Button onClick={handleRecordUsage} disabled={savingUsage}>
-              {savingUsage ? <Loader2 size={14} className="animate-spin mr-2" /> : "Record"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 3. Confirm Delete */}
-      <Dialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete Item</DialogTitle>
-            <DialogDescription>This item will be permanently removed.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleConfirmDelete}>Delete</Button>
+            <Button variant="destructive" onClick={handleDeleteItem}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* 4. Management Modal */}
-      <Dialog open={showManagement} onOpenChange={setShowManagement}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Inventory Configuration</DialogTitle>
-            <DialogDescription>Manage your inventory categories and device types.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-8 py-4">
-            {/* Categories Section */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <Package size={16} className="text-primary" /> Categories
-              </h3>
-              <form onSubmit={handleCreateCategory} className="flex gap-2">
-                <Input
-                  placeholder="New category name..."
-                  value={newCatName}
-                  onChange={e => setNewCatName(e.target.value)}
-                  className="h-9 text-sm"
-                />
-                <Button type="submit" size="sm" disabled={!newCatName.trim()}>Add</Button>
-              </form>
-              <div className="border rounded-lg divide-y bg-muted/10 max-h-40 overflow-y-auto">
-                {categories.map(cat => (
-                  <div key={cat.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className="font-medium">{cat.name}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveCategory(cat.id)}>
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Types Section */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <Settings2 size={16} className="text-primary" /> Device Models / Types
-              </h3>
-              <form onSubmit={handleCreateType} className="grid grid-cols-2 gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="h-9 w-full justify-between text-xs px-3">
-                      {typeCatSelect || "Select Category"}
-                      <ChevronsUpDown size={14} className="opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-48">
-                    {categories.map(c => (
-                      <DropdownMenuItem key={c.id} onClick={() => setTypeCatSelect(c.name)}>{c.name}</DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="e.g. FMB920"
-                    value={newTypeName}
-                    onChange={e => setNewTypeName(e.target.value)}
-                    className="h-9 text-sm"
-                  />
-                  <Button type="submit" size="sm" disabled={!newTypeName.trim() || !typeCatSelect}>Add</Button>
-                </div>
-              </form>
-              <div className="border rounded-lg divide-y bg-muted/10 max-h-60 overflow-y-auto">
-                {types.map(t => (
-                  <div key={t.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <div>
-                      <span className="font-medium">{t.name}</span>
-                      <Badge variant="outline" className="ml-2 scale-75 origin-left">{t.category_name}</Badge>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveType(t.id)}>
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowManagement(false)}>Done</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
     </div>
   );
 }

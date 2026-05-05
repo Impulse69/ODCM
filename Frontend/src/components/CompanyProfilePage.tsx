@@ -16,7 +16,17 @@ import {
   Table, TableBody, TableCell,
   TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Car, MapPin } from "lucide-react"
 import { computeStatus } from "@/lib/vehicle-status"
+import { cn } from "@/lib/utils"
 
 const statusColors: Record<string, string> = {
   Active:    "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -24,6 +34,7 @@ const statusColors: Record<string, string> = {
   Expired:   "bg-red-50 text-red-700 border-red-200",
   Overdue:   "bg-red-50 text-red-700 border-red-200",
   Suspended: "bg-zinc-100 text-zinc-500 border-zinc-200",
+  Removed:   "bg-gray-100 text-gray-500 border-gray-200",
 }
 
 type Props = { id: string }
@@ -38,6 +49,7 @@ export default function CompanyProfilePage({ id }: Props) {
   const [email,    setEmail]    = useState("")
   const [address,  setAddress]  = useState("")
   const [saving,   setSaving]   = useState(false)
+  const [viewVehicle, setViewVehicle] = useState<CustomerVehicle | null>(null)
 
   useEffect(() => {
     Promise.all([getCompanyById(id), getCompanySubscriptions(id)])
@@ -133,7 +145,11 @@ export default function CompanyProfilePage({ id }: Props) {
                     {vehicles.map((v) => {
                       const cs = computeStatus(v.expiry_date, v.status)
                       return (
-                        <TableRow key={v.id}>
+                        <TableRow 
+                          key={v.id}
+                          className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => setViewVehicle(v)}
+                        >
                           <TableCell className="font-semibold">{v.plate_number}</TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground">{v.imei}</TableCell>
                           <TableCell>
@@ -155,7 +171,7 @@ export default function CompanyProfilePage({ id }: Props) {
                             ) : <span className="text-xs text-muted-foreground">—</span>}
                           </TableCell>
                           <TableCell className="text-right font-semibold text-sm">
-                            GH? {Number(v.monthly_amount).toLocaleString()}
+                            GH₵ {Number(v.monthly_amount).toLocaleString()}
                           </TableCell>
                         </TableRow>
                       )
@@ -174,6 +190,84 @@ export default function CompanyProfilePage({ id }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Vehicle Details Dialog ────────────────────────────────────── */}
+      <Dialog open={!!viewVehicle} onOpenChange={(open) => { if (!open) setViewVehicle(null); }}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Car className="h-5 w-5 text-orange-600" />
+              Vehicle Details
+            </DialogTitle>
+            <DialogDescription>
+              Detailed information for <span className="font-bold text-foreground">{viewVehicle?.plate_number}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewVehicle && (
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 py-4 text-sm">
+              <div className="space-y-1">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Company</p>
+                <p className="font-semibold">{company?.company_name}</p>
+              </div>
+              <div className="space-y-1 text-right">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Status</p>
+                <Badge variant="outline" className={cn(
+                  "font-bold px-2 py-0.5",
+                  viewVehicle.trakzee_status === "Active" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-red-50 text-red-600 border-red-200"
+                )}>
+                  Trakzee {viewVehicle.trakzee_status}
+                </Badge>
+              </div>
+
+              <div className="col-span-2 border-t border-border pt-4">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground mb-3">Hardware Information</p>
+                <div className="grid grid-cols-2 gap-4 bg-muted/30 p-3 rounded-lg border border-border">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">Tracker IMEI</p>
+                    <p className="font-mono font-bold text-xs">{viewVehicle.imei}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase">SIM IMEI / Number</p>
+                    <p className="font-mono font-bold text-xs">{viewVehicle.sim_imei || "—"}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-span-2 border-t border-border pt-4">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground mb-3">Subscription & Installation</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase">Service Plan</p>
+                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 font-bold">{viewVehicle.plan}</Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase">Expiry Date</p>
+                    <p className="font-semibold">{new Date(viewVehicle.expiry_date).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase">Installation Date</p>
+                    <p className="font-semibold">
+                      {viewVehicle.installation_date ? new Date(viewVehicle.installation_date).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }) : "—"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase">Installation Location</p>
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <MapPin size={12} className="text-muted-foreground" />
+                      {viewVehicle.installation_location || "—"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewVehicle(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

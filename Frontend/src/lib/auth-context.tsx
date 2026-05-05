@@ -10,6 +10,7 @@ export interface User {
   name: string;
   phone: string | null;
   role: string;
+  is_active: boolean;
   initials: string;
 }
 
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) {
+          console.warn("[AuthContext] Profile verification failed, status:", res.status);
           clearAuth();
           setUser(null);
         } else {
@@ -69,12 +71,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(u);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
         }
-      } catch {
+      } catch (err) {
+        console.error("[AuthContext] Network error during verification:", err);
         // Network down — trust cached user so app stays usable offline
         try {
           const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) setUser(JSON.parse(stored));
-          else clearAuth();
+          if (stored) {
+            console.log("[AuthContext] Restoring user from storage because server is unreachable");
+            setUser(JSON.parse(stored));
+          } else {
+            // Only clear auth if we didn't have a user cached, otherwise we might loop
+            // if the server is temporarily down.
+            setIsLoading(false);
+          }
         } catch {
           clearAuth();
         }

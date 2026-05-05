@@ -28,9 +28,16 @@ async function login(req, res) {
     if (!match) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
+    if (user.is_active === false) {
+      return res.status(403).json({ success: false, message: 'This account is inactive. Please contact your administrator.' });
+    }
 
     const { password: _, ...safeUser } = user;
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, name: user.name, initials: user.initials, is_active: user.is_active },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
     res.json({ success: true, user: safeUser, token });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -50,7 +57,11 @@ async function signup(req, res) {
     }
 
     const user = await createUser({ email: email.toLowerCase(), password, name: username, role: 'Admin' });
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, name: user.name, initials: user.initials, is_active: user.is_active },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
     res.status(201).json({ success: true, user, token });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -61,6 +72,9 @@ async function getProfile(req, res) {
   try {
     const user = await findById(req.user.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (user.is_active === false) {
+      return res.status(403).json({ success: false, message: 'This account is inactive. Please contact your administrator.' });
+    }
     const { password: _, ...safeUser } = user;
     res.json({ success: true, data: safeUser });
   } catch (err) {

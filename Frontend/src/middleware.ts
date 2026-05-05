@@ -17,20 +17,23 @@ export function middleware(request: NextRequest) {
 
   const token = request.cookies.get("odcms_auth_token")?.value;
   const isRoot = pathname === "/";
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   const isProtected = PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   if (isRoot) {
+    console.log("[Middleware] Root access, redirecting to", token ? "/dashboard" : "/login");
     return NextResponse.redirect(new URL(token ? "/dashboard" : "/login", request.url));
   }
 
   // Authenticated user trying to access login/signup → redirect to dashboard
   if (isPublic && token) {
+    console.log("[Middleware] Authenticated user on public path, redirecting to /dashboard");
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // Unauthenticated user trying to access the dashboard → redirect to login
   if (isProtected && !token) {
+    console.log("[Middleware] Unauthenticated user on protected path, redirecting to /login");
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

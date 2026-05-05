@@ -67,30 +67,47 @@ export default function TopNav({
 }: TopNavProps) {
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [shouldRefreshNotifications, setShouldRefreshNotifications] = useState(true);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const logs = await getRecentSmsLogs();
-      const mapped: Notification[] = logs.map(log => ({
-        id: log.id,
-        title: log.sms_status === 'Sent' ? 'SMS Sent Successfully' : 'SMS Delivery Failed',
-        message: `Plate: ${log.plate_number} — ${log.customer_name} (${log.last_sms_type})`,
-        time: timeAgo(log.sms_sent_at),
-        type: log.sms_status === 'Sent' ? 'success' : 'error',
-        unread: false, // For now, we don't have per-user unread state in DB
-      }));
-      setNotifications(mapped);
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error);
-    }
-  }, []);
 
-  // Fetch on mount and set up polling
   useEffect(() => {
-    fetchNotifications();
-    const timer = setInterval(fetchNotifications, 60000); // Poll every minute
+    if (!shouldRefreshNotifications) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const logs = await getRecentSmsLogs();
+        if (cancelled) return;
+        const mapped: Notification[] = logs.map(log => ({
+          id: log.id,
+          title: log.sms_status === 'Sent' ? 'SMS Sent Successfully' : 'SMS Delivery Failed',
+          message: `Plate: ${log.plate_number} — ${log.customer_name} (${log.last_sms_type})`,
+          time: timeAgo(log.sms_sent_at),
+          type: log.sms_status === 'Sent' ? 'success' : 'error',
+          unread: false,
+        }));
+        setNotifications(mapped);
+      } catch (error) {
+        console.error("Failed to fetch notifications:", error);
+      } finally {
+        if (!cancelled) setShouldRefreshNotifications(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldRefreshNotifications]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setShouldRefreshNotifications(true);
+    }, 60000); // Poll every minute
     return () => clearInterval(timer);
-  }, [fetchNotifications]);
+  }, []);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
@@ -104,7 +121,7 @@ export default function TopNav({
 
   return (
     <header
-      className="fixed top-0 right-0 z-30 flex items-center justify-between h-16 bg-card border-b border-border px-4 sm:px-6 gap-4 left-0 md:left-[var(--sidebar-width)]"
+      className="fixed top-0 right-0 z-30 flex items-center justify-between h-16 bg-card border-b border-border px-4 sm:px-6 gap-4 left-0 md:left-(--sidebar-width)"
       style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
     >
       {/* Mobile hamburger */}

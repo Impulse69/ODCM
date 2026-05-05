@@ -4,10 +4,7 @@ import { getApiBase } from './api-base';
 const BASE = getApiBase();
 
 function handleUnauthorized() {
-  localStorage.removeItem('odcms_auth_user');
-  localStorage.removeItem('odcms_auth_token');
-  document.cookie = 'odcms_auth_token=; path=/; max-age=0; SameSite=Strict';
-  window.location.replace('/login');
+  throw new Error('You are not authorized to perform this SMS action. Please sign in again if needed.');
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -20,7 +17,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
-  if (res.status === 401) { handleUnauthorized(); throw new Error('Session expired'); }
+  if (res.status === 401) { handleUnauthorized(); }
   const json = await res.json();
   if (!res.ok) throw new Error(json.message ?? 'API error');
   return json.data as T;

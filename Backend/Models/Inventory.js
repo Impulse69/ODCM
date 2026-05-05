@@ -40,10 +40,22 @@ async function createInventoryTables() {
 			imei_number   TEXT NOT NULL,
 			type          TEXT NOT NULL,
 			installed_by  TEXT NOT NULL,
-			quantity_used INTEGER NOT NULL DEFAULT 1,
+			client_name   TEXT NOT NULL,
+			vehicle_number TEXT NOT NULL,
+			location      TEXT NOT NULL,
 			used_at       TIMESTAMP DEFAULT NOW()
 		)
 	`);
+
+	await pool.query(`ALTER TABLE inventory_usage ADD COLUMN IF NOT EXISTS client_name TEXT`);
+	await pool.query(`ALTER TABLE inventory_usage ADD COLUMN IF NOT EXISTS vehicle_number TEXT`);
+	await pool.query(`ALTER TABLE inventory_usage ADD COLUMN IF NOT EXISTS location TEXT`);
+	await pool.query(`UPDATE inventory_usage SET client_name = COALESCE(NULLIF(client_name, ''), 'Unknown Client') WHERE client_name IS NULL OR client_name = ''`);
+	await pool.query(`UPDATE inventory_usage SET vehicle_number = COALESCE(NULLIF(vehicle_number, ''), 'Unknown Vehicle') WHERE vehicle_number IS NULL OR vehicle_number = ''`);
+	await pool.query(`UPDATE inventory_usage SET location = COALESCE(NULLIF(location, ''), 'Unknown Location') WHERE location IS NULL OR location = ''`);
+	await pool.query(`ALTER TABLE inventory_usage ALTER COLUMN client_name SET NOT NULL`);
+	await pool.query(`ALTER TABLE inventory_usage ALTER COLUMN vehicle_number SET NOT NULL`);
+	await pool.query(`ALTER TABLE inventory_usage ALTER COLUMN location SET NOT NULL`);
 
 }
 
@@ -68,8 +80,18 @@ async function deleteCategory(id) {
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-async function getAllTypes() {
-	const { rows } = await pool.query('SELECT * FROM inventory_types ORDER BY name ASC');
+async function getAllTypes(categoryName) {
+	const params = [];
+	const where = [];
+	if (categoryName) {
+		params.push(categoryName);
+		where.push(`category_name = $${params.length}`);
+	}
+
+	const { rows } = await pool.query(
+		`SELECT * FROM inventory_types ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY name ASC`,
+		params
+	);
 	return rows;
 }
 
@@ -87,8 +109,23 @@ async function deleteType(id) {
 
 // ─── Inventory Items ───────────────────────────────────────────────────────────
 
-async function getAllItems() {
-	const { rows } = await pool.query('SELECT * FROM inventory ORDER BY created_at DESC');
+async function getAllItems({ category, type } = {}) {
+	const params = [];
+	const where = [];
+
+	if (category) {
+		params.push(category);
+		where.push(`category = $${params.length}`);
+	}
+	if (type) {
+		params.push(type);
+		where.push(`type = $${params.length}`);
+	}
+
+	const { rows } = await pool.query(
+		`SELECT * FROM inventory ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC`,
+		params
+	);
 	return rows;
 }
 
@@ -101,7 +138,7 @@ async function createItem({ category, imei_number, type, quantity }) {
 	const { rows } = await pool.query(
 		`INSERT INTO inventory (category, imei_number, type, quantity)
 		 VALUES ($1, $2, $3, $4) RETURNING *`,
-		[category, imei_number, type, quantity]
+		[category, imei_number, type, quantity ?? 1]
 	);
 	return rows[0];
 }
@@ -134,7 +171,7 @@ async function deleteItem(id) {
 
 // ─── Use Item (transactional) ──────────────────────────────────────────────────
 
-async function useItem({ inventory_id, installed_by, quantity_used }) {
+async function useItem({ inventory_id, installed_by, client_name, vehicle_number, location }) {
 	const client = await pool.connect();
 	try {
 		await client.query('BEGIN');
@@ -147,22 +184,14 @@ async function useItem({ inventory_id, installed_by, quantity_used }) {
 		if (!itemRows.length) throw new Error('Inventory item not found.');
 		const item = itemRows[0];
 
-		if (item.quantity < quantity_used) {
-			throw new Error(`Insufficient stock. Available: ${item.quantity}, Requested: ${quantity_used}`);
-		}
-
-		// Decrement quantity
-		await client.query(
-			'UPDATE inventory SET quantity = quantity - $1, updated_at = NOW() WHERE id = $2',
-			[quantity_used, inventory_id]
-		);
-
 		// Insert usage record
 		const { rows: usageRows } = await client.query(
-			`INSERT INTO inventory_usage (inventory_id, category, imei_number, type, installed_by, quantity_used)
-			 VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-			[inventory_id, item.category, item.imei_number, item.type, installed_by, quantity_used]
+			`INSERT INTO inventory_usage (inventory_id, category, imei_number, type, installed_by, client_name, vehicle_number, location)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+			[inventory_id, item.category, item.imei_number, item.type, installed_by, client_name, vehicle_number, location]
 		);
+
+		await client.query('DELETE FROM inventory WHERE id = $1', [inventory_id]);
 
 		await client.query('COMMIT');
 		return usageRows[0];

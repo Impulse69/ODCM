@@ -140,10 +140,12 @@ export interface CustomerVehicle {
   id: string;
   plate_number: string;
   imei: string;
+  sim_imei?: string;
   plan: string;
   monthly_amount: number;
   expiry_date: string;
   installation_date: string | null;
+  installation_location?: string;
   status: string;
   trakzee_status: 'Active' | 'Deactivated';
   sms_status: string | null;

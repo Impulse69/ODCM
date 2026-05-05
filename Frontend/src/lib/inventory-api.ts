@@ -59,7 +59,9 @@ export interface InventoryUsage {
   imei_number: string;
   type: string;
   installed_by: string;
-  quantity_used: number;
+  client_name: string;
+  vehicle_number: string;
+  location: string;
   used_at: string;
 }
 
@@ -73,7 +75,9 @@ export interface AddItemPayload {
 export interface UseItemPayload {
   inventory_id: number;
   installed_by: string;
-  quantity_used: number;
+  client_name: string;
+  vehicle_number: string;
+  location: string;
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -95,6 +99,9 @@ export const removeInventoryCategory = (id: number) =>
 export const getInventoryTypes = () =>
   request<InventoryType[]>('/api/inventory/types');
 
+export const getInventoryTypesByCategory = (category: string) =>
+  request<InventoryType[]>(`/api/inventory/types?category=${encodeURIComponent(category)}`);
+
 export const addInventoryType = (category_name: string, name: string) =>
   request<InventoryType>('/api/inventory/types', {
     method: 'POST',
@@ -106,8 +113,13 @@ export const removeInventoryType = (id: number) =>
 
 // ─── Inventory Items ──────────────────────────────────────────────────────────
 
-export const getInventoryItems = () =>
-  request<InventoryItem[]>('/api/inventory');
+export const getInventoryItems = (filters?: { category?: string; type?: string }) => {
+  const params = new URLSearchParams();
+  if (filters?.category) params.set('category', filters.category);
+  if (filters?.type) params.set('type', filters.type);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return request<InventoryItem[]>(`/api/inventory${suffix}`);
+};
 
 export const addInventoryItem = (payload: AddItemPayload) =>
   request<InventoryItem>('/api/inventory', {

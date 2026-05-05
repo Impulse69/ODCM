@@ -75,10 +75,12 @@ async function createTables() {
       id                    VARCHAR(20)         PRIMARY KEY,   -- e.g. "SUB-001"
       plate_number          VARCHAR(30)         NOT NULL,
       imei                  VARCHAR(20)         NOT NULL UNIQUE,
+      sim_imei              VARCHAR(20),
       plan                  VARCHAR(50)         NOT NULL,
       monthly_amount        NUMERIC(10, 2)      NOT NULL,
       expiry_date           DATE                NOT NULL,
       installation_date     DATE,
+      installation_location TEXT,
       status                subscription_status NOT NULL DEFAULT 'Active',
       trakzee_status        trakzee_status      NOT NULL DEFAULT 'Active',
 
@@ -122,6 +124,9 @@ async function createTables() {
     ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS sms_status    VARCHAR(20)  DEFAULT NULL;
     ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS sms_sent_at   TIMESTAMPTZ  DEFAULT NULL;
     ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_sms_type VARCHAR(20)  DEFAULT NULL;
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS sim_imei      VARCHAR(20)  DEFAULT NULL;
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS sim_number    VARCHAR(30)  DEFAULT NULL;
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS installation_location TEXT DEFAULT NULL;
   `);
 
   // ── SMS configuration key-value store ────────────────────────────────────────

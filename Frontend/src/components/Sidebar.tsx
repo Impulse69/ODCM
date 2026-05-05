@@ -12,6 +12,8 @@ import {
     ChevronLeft,
     ChevronRight,
     History,
+    ClipboardList,
+    FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,16 +32,18 @@ const navItems: NavItem[] = [
     { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} />, section: "main" },
     { id: "customers", label: "Customers", icon: <Users size={20} />, section: "main" },
     { id: "vehicles", label: "Vehicles", icon: <Car size={20} />, section: "main" },
-    { id: "subscriptions", label: "Subscriptions", icon: <CreditCard size={20} />, section: "main", badge: 3 },
+    { id: "subscriptions", label: "Subscriptions", icon: <CreditCard size={20} />, section: "main" },
     { id: "removed", label: "Removed List", icon: <ShieldOff size={20} />, section: "main" },
     { id: "payment-history", label: "Payment History", icon: <History size={20} />, section: "main" },
     { id: "inventory", label: "Inventory", icon: <Upload size={20} />, section: "main" },
+    { id: "users", label: "Users", icon: <ClipboardList size={20} />, section: "main" },
+    { id: "logs", label: "Logs", icon: <FileText size={20} />, section: "main" },
     { id: "bulk-import", label: "Bulk Import", icon: <Upload size={20} />, section: "tools" },
 ];
 
 function isSuperAdminRole(role?: string) {
     const normalized = String(role ?? "").trim().toLowerCase().replace(/[_\s]+/g, " ");
-    return normalized === "super admin";
+    return normalized === "super admin" || normalized === "superadmin";
 }
 
 interface SidebarProps {
@@ -52,12 +56,12 @@ interface SidebarProps {
 export default function Sidebar({ activeSection, onNavigate, mobileOpen, onMobileClose }: SidebarProps) {
     const [collapsed, setCollapsed] = useState(false);
     const { user } = useAuth();
-    const canAccessInventory = isSuperAdminRole(user?.role);
+    const canAccessSuperAdminSections = isSuperAdminRole(user?.role);
 
     const mainItems = navItems.filter(
         (n) =>
             n.section === "main" &&
-            (n.id !== "inventory" || canAccessInventory)
+            (n.id !== "users" && n.id !== "logs" || canAccessSuperAdminSections)
     );
     const toolItems = navItems.filter((n) => n.section === "tools");
 

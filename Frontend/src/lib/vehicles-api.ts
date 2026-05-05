@@ -32,10 +32,13 @@ export interface Vehicle {
   id: string;
   plate_number: string;
   imei: string;
+  sim_imei: string | null;
+  sim_number?: string | null;
   plan: string;
   monthly_amount: number;
   expiry_date: string;
   installation_date: string | null;
+  installation_location: string | null;
   status: string;
   trakzee_status: 'Active' | 'Deactivated';
   individual_customer_id: string | null;
@@ -52,9 +55,15 @@ export interface Vehicle {
 export interface AddVehiclePayload {
   plate_number: string;
   imei: string;
+  inventory_id?: number;
+  sim_inventory_id?: number;
+  sim_imei?: string;
+  sim_number?: string;
+  owner_name: string;
   plan: string;
   expiry_date: string;
   installation_date?: string;
+  installation_location: string;
   status?: string;
   trakzee_status?: 'Active' | 'Deactivated';
   individual_customer_id?: string;
@@ -82,6 +91,12 @@ export const updateVehicleExpiry = (id: string, expiry_date: string) =>
   request<Vehicle>(`/api/vehicles/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ expiry_date, status: 'Active' }),
+  });
+
+export const updateVehicle = (id: string, body: Partial<AddVehiclePayload>) =>
+  request<Vehicle>(`/api/vehicles/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
   });
 
 export const deleteVehicle = (id: string) =>
