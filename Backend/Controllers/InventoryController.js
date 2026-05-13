@@ -7,14 +7,16 @@ const {
 	createItem,
 	updateItem,
 	deleteItem,
-	useItem,
+	consumeItemAndGetLowStockStatus,
 	getUsageHistory,
 	getAllTypes,
 	createType,
 	deleteType,
+	resetLowStockAlertIfRecovered,
 } = require('../Models/Inventory');
 const { findById } = require('../Models/User');
 const { recordAuditLog } = require('../Models/AuditLog');
+const { sendLowStockAlertToAdmins, getConfigFromDb } = require('./SmsController');
 
 async function getActor(req) {
 	const actor = req.user?.id ? await findById(req.user.id) : null;
@@ -24,6 +26,12 @@ async function getActor(req) {
 		email: actor?.email ?? req.user?.email ?? null,
 		role: actor?.role ?? req.user?.role ?? null,
 	};
+}
+
+async function getLowStockThreshold() {
+	const cfg = await getConfigFromDb();
+	const threshold = Number.parseInt(String(cfg.low_stock_threshold || '10'), 10);
+	return Number.isInteger(threshold) && threshold > 0 ? threshold : 10;
 }
 
 // ─── Categories ────────────────────────────────────────────────────────────────
@@ -179,7 +187,9 @@ async function addInventoryItem(req, res) {
 		if (!category || !imei_number || !type) {
 			return res.status(400).json({ success: false, message: 'Missing required fields.' });
 		}
+		const lowStockThreshold = await getLowStockThreshold();
 		const item = await createItem({ category, imei_number, type, quantity: 1 });
+		await resetLowStockAlertIfRecovered(category, type, lowStockThreshold);
 		const actor = await getActor(req);
 		await recordAuditLog({
 			actorUserId: actor.id,
@@ -265,14 +275,17 @@ async function recordUsage(req, res) {
 			return res.status(400).json({ success: false, message: 'Missing required fields (inventory_id, installed_by, client_name, vehicle_number, location).' });
 		}
 
+		const lowStockThreshold = await getLowStockThreshold();
 		const before = await getItemById(inventory_id);
-		const usage = await useItem({
+		const result = await consumeItemAndGetLowStockStatus({
 			inventory_id,
 			installed_by: installerName,
 			client_name: clientName,
 			vehicle_number: vehicleNumber,
 			location: usageLocation,
+			threshold: lowStockThreshold,
 		});
+		const usage = result.usage;
 		await recordAuditLog({
 			actorUserId: actor.id,
 			actorName: actor.name,
@@ -286,6 +299,12 @@ async function recordUsage(req, res) {
 			beforeData: before,
 			afterData: usage,
 		});
+
+		if (result.lowStock.shouldAlert) {
+			sendLowStockAlertToAdmins(result.lowStock)
+				.catch((alertErr) => console.error('[Inventory SMS] Low stock alert error:', alertErr.message));
+		}
+
 		res.status(201).json({ success: true, data: usage });
 	} catch (err) {
 		res.status(500).json({ success: false, message: err.message });

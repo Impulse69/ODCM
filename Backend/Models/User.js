@@ -70,6 +70,19 @@ async function getAllUsers() {
   return rows;
 }
 
+async function getActiveAdminUsersWithPhone() {
+  const { rows } = await pool.query(
+    `SELECT id, email, name, phone, role
+     FROM users
+     WHERE is_active = TRUE
+       AND phone IS NOT NULL
+       AND TRIM(phone) <> ''
+       AND LOWER(role) IN ('admin', 'super admin')
+     ORDER BY created_at DESC`
+  );
+  return rows;
+}
+
 async function createManagedUser({ email, password, name, role, phone, is_active = true }) {
   const normalizedRole = normalizeRole(role);
   if (!normalizedRole) {
@@ -185,6 +198,7 @@ module.exports = {
   findById,
   createUser,
   getAllUsers,
+  getActiveAdminUsersWithPhone,
   createManagedUser,
   updateManagedUser,
   deleteUserById,

@@ -36,6 +36,8 @@ export interface SmsConfig {
   firstReminderDays: number;
   secondReminderDays: number;
   thirdReminderDays: number;
+  lowStockThreshold: number;
+  lowStockTemplate: string;
   adminEmail: string;
   smtpHost: string;
   smtpPort: string;
@@ -64,6 +66,13 @@ export interface SmsJobResult {
   removed: number;
 }
 
+export interface BulkRemovedSmsResult {
+  sent: number;
+  failed: number;
+  skipped: number;
+  total: number;
+}
+
 export interface SmsLog {
   id: number;
   plate_number: string;
@@ -82,6 +91,16 @@ export interface EmailTestResult {
   messageId: string;
   reportFileName?: string;
   itemCount?: number;
+}
+
+export interface LowStockSmsTestResult {
+  message: string;
+  recipients: Array<{
+    name: string;
+    phone: string;
+    success: boolean;
+    message: string;
+  }>;
 }
 
 // ── API Functions ─────────────────────────────────────────────────────────────
@@ -104,6 +123,17 @@ export const testSmsApi = (to: string) =>
     body: JSON.stringify({ to }),
   });
 
+export const testLowStockSmsApi = (body: {
+  category: string;
+  type: string;
+  remainingCount: number;
+  threshold: number;
+}) =>
+  request<LowStockSmsTestResult>('/api/sms/test-low-stock', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
 export const testEmailApi = () =>
   request<EmailTestResult>('/api/sms/test-email', {
     method: 'POST',
@@ -111,6 +141,9 @@ export const testEmailApi = () =>
 
 export const sendVehicleSms = (vehicleId: string) =>
   request<SmsSendResult>(`/api/sms/send/${vehicleId}`, { method: 'POST' });
+
+export const sendRemovedExpirySms = () =>
+  request<BulkRemovedSmsResult>('/api/sms/send-removed-expired', { method: 'POST' });
 
 export const runSmsJob = () =>
   request<SmsJobResult>('/api/sms/run-job', { method: 'POST' });

@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { getSmsConfig, saveSmsConfig, testSmsApi, testEmailApi, runSmsJob, type SmsJobResult } from "@/lib/sms-api";
+import { getSmsConfig, saveSmsConfig, testSmsApi, testEmailApi, testLowStockSmsApi, runSmsJob, type SmsJobResult } from "@/lib/sms-api";
 import { useToast } from "@/lib/toast";
 
 interface ToggleProps {
@@ -59,8 +59,16 @@ export default function SettingsView() {
     const [showSecret, setShowSecret] = useState(false);
     const [smsSaved, setSmsSaved] = useState(false);
     const [testStatus, setTestStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+    const [lowStockTestStatus, setLowStockTestStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
     const [hubtelConnected, setHubtelConnected] = useState(false);
     const [configLoading, setConfigLoading] = useState(true);
+    const [lowStockConfig, setLowStockConfig] = useState({
+        threshold: 10,
+        template: "Low stock alert: {type} in {category} is at or below {threshold}. Only {remainingCount} item(s) left. Restock needed.",
+        category: "Tracker",
+        type: "GT06N",
+        remainingCount: 9,
+    });
 
     // Load config from backend on mount
     useEffect(() => {
@@ -79,6 +87,12 @@ export default function SettingsView() {
                     firstReminderDays: cfg.firstReminderDays,
                     secondReminderDays: cfg.secondReminderDays,
                     thirdReminderDays: cfg.thirdReminderDays || 3,
+                }));
+                setLowStockConfig((p) => ({
+                    ...p,
+                    threshold: cfg.lowStockThreshold ?? 10,
+                    template: cfg.lowStockTemplate ?? p.template,
+                    remainingCount: Math.max(0, (cfg.lowStockThreshold ?? 10) - 1),
                 }));
                 setEmailConfig((p) => ({
                     ...p,
@@ -165,12 +179,36 @@ export default function SettingsView() {
                 firstReminderDays: systemSettings.firstReminderDays,
                 secondReminderDays: systemSettings.secondReminderDays,
                 thirdReminderDays: systemSettings.thirdReminderDays,
+                lowStockThreshold: lowStockConfig.threshold,
+                lowStockTemplate: lowStockConfig.template,
             });
             setSystemSaved(true);
             setTimeout(() => setSystemSaved(false), 2500);
-            toast.success("General settings saved", `Reminders set to ${systemSettings.firstReminderDays}, ${systemSettings.secondReminderDays}, and ${systemSettings.thirdReminderDays} days before expiry.`);
+            toast.success("General settings saved", `Expiry reminders and low stock threshold (${lowStockConfig.threshold}) have been updated.`);
         } catch (err) {
             toast.error("Failed to save settings", err instanceof Error ? err.message : "Please try again.");
+        }
+    };
+
+    const handleTestLowStockSms = async () => {
+        setLowStockTestStatus("sending");
+        try {
+            const result = await testLowStockSmsApi({
+                category: lowStockConfig.category.trim() || "Tracker",
+                type: lowStockConfig.type.trim() || "GT06N",
+                remainingCount: Number(lowStockConfig.remainingCount),
+                threshold: Number(lowStockConfig.threshold),
+            });
+            setLowStockTestStatus("success");
+            const recipientSummary = result.recipients.length
+                ? result.recipients.map((entry) => `${entry.name} (${entry.phone})`).join(", ")
+                : "No recipients";
+            toast.success("Low stock SMS test sent", `${result.message} | recipients: ${recipientSummary}`);
+        } catch (err) {
+            setLowStockTestStatus("error");
+            toast.error("Low stock SMS test failed", err instanceof Error ? err.message : "Check the SMS settings and admin phone numbers.");
+        } finally {
+            setTimeout(() => setLowStockTestStatus("idle"), 3500);
         }
     };
 
@@ -887,6 +925,103 @@ export default function SettingsView() {
                                             e.g. 3 → Final reminder SMS 3 days before expiry
                                         </p>
                                     </div>
+                                </div>
+
+                                <div className="mt-5 space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+                                    <div>
+                                        <p className="text-xs font-semibold text-foreground">Low Stock SMS Alert</p>
+                                        <p className="text-[0.7rem] text-muted-foreground mt-1">
+                                            Set the inventory threshold that triggers admin alerts when stock is at or below the limit, customize the SMS text, and send a live test to Admin and Super Admin users.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Low stock threshold</Label>
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                value={lowStockConfig.threshold}
+                                                onChange={(e) =>
+                                                    setLowStockConfig((p) => ({
+                                                        ...p,
+                                                        threshold: parseInt(e.target.value) || 10,
+                                                    }))
+                                                }
+                                                className="h-9 text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Sample category</Label>
+                                            <Input
+                                                value={lowStockConfig.category}
+                                                onChange={(e) => setLowStockConfig((p) => ({ ...p, category: e.target.value }))}
+                                                className="h-9 text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Sample type</Label>
+                                            <Input
+                                                value={lowStockConfig.type}
+                                                onChange={(e) => setLowStockConfig((p) => ({ ...p, type: e.target.value }))}
+                                                className="h-9 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Sample remaining count</Label>
+                                            <Input
+                                                type="number"
+                                                min={0}
+                                                value={lowStockConfig.remainingCount}
+                                                onChange={(e) =>
+                                                    setLowStockConfig((p) => ({
+                                                        ...p,
+                                                        remainingCount: parseInt(e.target.value) || 0,
+                                                    }))
+                                                }
+                                                className="h-9 text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold">Preview</Label>
+                                            <div className="min-h-9 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                                                {lowStockConfig.template
+                                                    .replace(/\{category\}/g, lowStockConfig.category || "Tracker")
+                                                    .replace(/\{type\}/g, lowStockConfig.type || "GT06N")
+                                                    .replace(/\{threshold\}/g, String(lowStockConfig.threshold || 10))
+                                                    .replace(/\{remainingCount\}/g, String(lowStockConfig.remainingCount || 0))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold">Low stock SMS template</Label>
+                                        <Textarea
+                                            className="text-xs min-h-20 font-mono resize-none"
+                                            value={lowStockConfig.template}
+                                            onChange={(e) => setLowStockConfig((p) => ({ ...p, template: e.target.value }))}
+                                        />
+                                        <p className="text-[0.65rem] text-muted-foreground">
+                                            Variables: <code className="bg-muted px-1 rounded text-[0.65rem]">{"{category}"}</code>{" "}
+                                            <code className="bg-muted px-1 rounded text-[0.65rem]">{"{type}"}</code>{" "}
+                                            <code className="bg-muted px-1 rounded text-[0.65rem]">{"{threshold}"}</code>{" "}
+                                            <code className="bg-muted px-1 rounded text-[0.65rem]">{"{remainingCount}"}</code>
+                                        </p>
+                                    </div>
+
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleTestLowStockSms}
+                                        className="gap-2"
+                                        disabled={lowStockTestStatus === "sending"}
+                                    >
+                                        {lowStockTestStatus === "sending" ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                                        {lowStockTestStatus === "sending" ? "Sending Low Stock SMS..." : "Test Low Stock SMS"}
+                                    </Button>
                                 </div>
 
                                 {/* Visual timeline */}

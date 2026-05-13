@@ -21,11 +21,12 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { getVehicles, updateTrakzee, updateVehicleExpiry, getRemovedVehicles, type Vehicle } from "@/lib/vehicles-api";
-import { sendVehicleSms } from "@/lib/sms-api";
+import { sendRemovedExpirySms, sendVehicleSms } from "@/lib/sms-api";
 import { savePayment } from "@/lib/payment-history";
 import { getPlans, type Plan } from "@/lib/plans-api";
 import { cn } from "@/lib/utils";
 import { computeStatus, calculateOwed } from "@/lib/vehicle-status";
+import { useToast } from "@/lib/toast";
 
 /** Utility: Add months to YYYY-MM-DD */
 function addMonths(dateStr: string, months: number): string {
@@ -59,8 +60,10 @@ export default function RemovedView() {
     });
 
     const [smsLoading, setSmsLoading] = useState<string | null>(null);
+    const [bulkSmsLoading, setBulkSmsLoading] = useState(false);
 
     const [plans, setPlans] = useState<Plan[]>([]);
+    const toast = useToast();
 
     const fetchRemoved = useCallback(async () => {
         setLoading(true);
@@ -98,6 +101,25 @@ export default function RemovedView() {
             // silent fail
         } finally {
             setSmsLoading(null);
+        }
+    };
+
+    const handleSendAllRemovedSms = async () => {
+        setBulkSmsLoading(true);
+        try {
+            const result = await sendRemovedExpirySms();
+            await fetchRemoved();
+            toast.success(
+                "Expiry SMS sent to removed list",
+                `Sent: ${result.sent}, Failed: ${result.failed}, Skipped: ${result.skipped}, Total: ${result.total}`
+            );
+        } catch (err) {
+            toast.error(
+                "Bulk expiry SMS failed",
+                err instanceof Error ? err.message : "Could not send expiry SMS to the removed list."
+            );
+        } finally {
+            setBulkSmsLoading(false);
         }
     };
 
@@ -247,6 +269,17 @@ export default function RemovedView() {
                         <p className={cn("text-2xl font-black", pendingDeactivation > 0 ? "text-amber-700" : "text-foreground")}>{pendingDeactivation}</p>
                     </button>
                 </div>
+            </div>
+
+            <div className="flex justify-end">
+                <Button
+                    onClick={handleSendAllRemovedSms}
+                    disabled={bulkSmsLoading || removedList.length === 0}
+                    className="h-10 px-4 gap-2 bg-odg-orange text-white hover:brightness-95"
+                >
+                    {bulkSmsLoading ? <Loader2 size={15} className="animate-spin" /> : <MessageSquare size={15} />}
+                    {bulkSmsLoading ? "Sending Expiry SMS..." : "Send Expiry SMS To All Removed"}
+                </Button>
             </div>
 
             {/* Arrears Summary */}

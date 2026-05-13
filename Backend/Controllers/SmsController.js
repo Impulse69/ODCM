@@ -2,6 +2,7 @@ const https = require('https');
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const pool = require('../Config/db');
+const { getActiveAdminUsersWithPhone } = require('../Models/User');
 
 // ─── Hubtel SMS Helper ────────────────────────────────────────────────────────
 
@@ -457,6 +458,78 @@ function interpolate(template, vars) {
     .replace(/\{daysLeft\}/g, String(vars.daysLeft ?? ''));
 }
 
+function buildLowStockMessage({ category, type, remainingCount, threshold, template }) {
+  const baseTemplate = template ||
+    'Low stock alert: {type} in {category} is at or below {threshold}. Only {remainingCount} item(s) left. Restock needed.';
+
+  return baseTemplate
+    .replace(/\{category\}/g, String(category || 'Unknown Category'))
+    .replace(/\{type\}/g, String(type || 'Unknown Type'))
+    .replace(/\{threshold\}/g, String(threshold ?? '10'))
+    .replace(/\{remainingCount\}/g, String(remainingCount ?? '0'));
+}
+
+async function sendLowStockAlertToAdmins({ category, type, remainingCount, threshold, template }) {
+  const cfg = await getConfigFromDb();
+  if (!cfg.client_id || !cfg.client_secret) {
+    return { success: false, message: 'Hubtel credentials not configured.', recipients: [] };
+  }
+
+  const admins = await getActiveAdminUsersWithPhone();
+  if (!admins.length) {
+    return { success: false, message: 'No active admin or super admin users with phone numbers found.', recipients: [] };
+  }
+
+  const recipients = [...new Map(admins.map((admin) => [String(admin.phone).trim(), admin])).values()];
+  const message = buildLowStockMessage({
+    category,
+    type,
+    remainingCount,
+    threshold,
+    template: template || cfg.low_stock_template,
+  });
+
+  const results = await Promise.all(
+    recipients.map(async (admin) => {
+      try {
+        const result = await sendHubtelSms({
+          clientId: cfg.client_id,
+          clientSecret: cfg.client_secret,
+          senderId: cfg.sender_id || 'ODG',
+          to: admin.phone,
+          message,
+        });
+        return {
+          name: admin.name,
+          phone: admin.phone,
+          success: !!result.success,
+          message: result.message || '',
+        };
+      } catch (err) {
+        return {
+          name: admin.name,
+          phone: admin.phone,
+          success: false,
+          message: err.message,
+        };
+      }
+    })
+  );
+
+  const failed = results.filter((entry) => !entry.success);
+  if (failed.length) {
+    failed.forEach((entry) => {
+      console.error(`[Inventory SMS] Failed for ${entry.phone}: ${entry.message}`);
+    });
+  }
+
+  return {
+    success: failed.length === 0,
+    message,
+    recipients: results,
+  };
+}
+
 // ─── GET /api/sms/config ──────────────────────────────────────────────────────
 
 async function getConfig(req, res) {
@@ -477,6 +550,9 @@ async function getConfig(req, res) {
         firstReminderDays: parseInt(cfg.first_reminder_days || '14'),
         secondReminderDays: parseInt(cfg.second_reminder_days || '7'),
         thirdReminderDays: parseInt(cfg.third_reminder_days || '3'),
+        lowStockThreshold: parseInt(cfg.low_stock_threshold || '10'),
+        lowStockTemplate: cfg.low_stock_template ||
+          'Low stock alert: {type} in {category} is at or below {threshold}. Only {remainingCount} item(s) left. Restock needed.',
         adminEmail: cfg.admin_email || '',
         smtpHost: cfg.smtp_host || '',
         smtpPort: cfg.smtp_port || '587',
@@ -498,6 +574,7 @@ async function saveConfig(req, res) {
       dueSoonEnabled, expiredEnabled,
       dueSoonTemplate, expiredTemplate,
       firstReminderDays, secondReminderDays, thirdReminderDays,
+      lowStockThreshold, lowStockTemplate,
     } = req.body;
 
     if (clientId !== undefined) await upsertSetting('client_id', clientId);
@@ -510,6 +587,15 @@ async function saveConfig(req, res) {
     if (firstReminderDays !== undefined) await upsertSetting('first_reminder_days', String(firstReminderDays));
     if (secondReminderDays !== undefined) await upsertSetting('second_reminder_days', String(secondReminderDays));
     if (thirdReminderDays !== undefined) await upsertSetting('third_reminder_days', String(thirdReminderDays));
+    if (lowStockTemplate !== undefined) await upsertSetting('low_stock_template', String(lowStockTemplate));
+
+    if (lowStockThreshold !== undefined && lowStockThreshold !== '') {
+      const threshold = Number(lowStockThreshold);
+      if (!Number.isInteger(threshold) || threshold < 1) {
+        return res.status(400).json({ success: false, message: 'Low stock threshold must be a whole number greater than 0.' });
+      }
+      await upsertSetting('low_stock_threshold', String(threshold));
+    }
 
     const { adminEmail, smtpHost, smtpPort, smtpUser, smtpPass } = req.body;
     const trimmedAdminEmail = adminEmail === undefined ? undefined : String(adminEmail).trim();
@@ -569,6 +655,45 @@ async function testSms(req, res) {
     });
 
     res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+async function testLowStockSms(req, res) {
+  try {
+    const cfg = await getConfigFromDb();
+    const threshold = parseInt(String(req.body.threshold ?? cfg.low_stock_threshold ?? '10'), 10);
+    const category = String(req.body.category ?? 'Tracker').trim() || 'Tracker';
+    const type = String(req.body.type ?? 'GT06N').trim() || 'GT06N';
+    const remainingCount = parseInt(String(req.body.remainingCount ?? Math.max(0, threshold - 1)), 10);
+
+    if (!Number.isInteger(threshold) || threshold < 1) {
+      return res.status(400).json({ success: false, message: 'Threshold must be a whole number greater than 0.' });
+    }
+    if (!Number.isInteger(remainingCount) || remainingCount < 0) {
+      return res.status(400).json({ success: false, message: 'Remaining count must be a whole number 0 or more.' });
+    }
+
+    const result = await sendLowStockAlertToAdmins({
+      category,
+      type,
+      remainingCount,
+      threshold,
+      template: req.body.template,
+    });
+
+    if (!result.success && !result.recipients.length) {
+      return res.status(400).json({ success: false, message: result.message });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        message: result.message,
+        recipients: result.recipients,
+      },
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -704,6 +829,73 @@ async function sendSmsForVehicle(req, res) {
     );
 
     res.json({ success: true, data: { smsStatus: newStatus, smsType, failReason: result.message } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+async function sendExpiredSmsToRemovedVehicles(req, res) {
+  try {
+    const cfg = await getConfigFromDb();
+    if (!cfg.client_id || !cfg.client_secret) {
+      return res.status(400).json({ success: false, message: 'Hubtel credentials not configured.' });
+    }
+
+    const { rows: vehicles } = await pool.query(
+      `SELECT s.id, s.plate_number, s.expiry_date,
+              COALESCE(ic.name,  co.company_name)  AS customer_name,
+              COALESCE(ic.phone, co.contact_phone) AS phone
+       FROM subscriptions s
+       LEFT JOIN individual_customers ic ON ic.id = s.individual_customer_id
+       LEFT JOIN companies            co ON co.id = s.company_id
+       WHERE s.status = 'Removed'
+       ORDER BY s.updated_at DESC`
+    );
+
+    if (!vehicles.length) {
+      return res.json({ success: true, data: { sent: 0, failed: 0, skipped: 0, total: 0 } });
+    }
+
+    let sent = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    const template = cfg.expired_template ||
+      'Dear {customerName}, your vehicle ({vehiclePlate}) subscription has expired. Please contact us to renew. - ODG';
+
+    for (const vehicle of vehicles) {
+      if (!vehicle.phone) {
+        skipped++;
+        continue;
+      }
+
+      const message = interpolate(template, {
+        customerName: vehicle.customer_name,
+        vehiclePlate: vehicle.plate_number,
+        daysLeft: 0,
+      });
+
+      const result = await sendHubtelSms({
+        clientId: cfg.client_id,
+        clientSecret: cfg.client_secret,
+        senderId: cfg.sender_id || 'ODG',
+        to: vehicle.phone,
+        message,
+      });
+
+      const newStatus = result.success ? 'Sent' : 'Failed';
+      await pool.query(
+        `UPDATE subscriptions
+         SET sms_status = $1, sms_sent_at = NOW(), last_sms_type = 'expired', updated_at = NOW()
+         WHERE id = $2`,
+        [newStatus, vehicle.id]
+      );
+
+      if (result.success) sent++;
+      else failed++;
+    }
+
+    res.json({ success: true, data: { sent, failed, skipped, total: vehicles.length } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -912,13 +1104,17 @@ module.exports = {
   getConfig,
   saveConfig,
   testSms,
+  testLowStockSms,
   testEmail,
   sendSmsForVehicle,
+  sendExpiredSmsToRemovedVehicles,
   runSmsJob,
   getSmsStats,
   executeSmsJob,
   getRecentSmsLogs,
   sendHubtelSms,
+  sendLowStockAlertToAdmins,
+  buildLowStockMessage,
   getConfigFromDb,
   createSmtpTransport,
 };

@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { getSmsConfig } from "@/lib/sms-api";
 import {
   addInventoryCategory,
   addInventoryItem,
@@ -107,6 +108,10 @@ export default function InventoryView() {
   const [error, setError] = useState<string | null>(null);
   const [stockSearch, setStockSearch] = useState("");
   const [usageSearch, setUsageSearch] = useState("");
+  const [stockCategoryFilter, setStockCategoryFilter] = useState("all");
+  const [stockTypeFilter, setStockTypeFilter] = useState("all");
+  const [usageCategoryFilter, setUsageCategoryFilter] = useState("all");
+  const [usageTypeFilter, setUsageTypeFilter] = useState("all");
   const [stockPage, setStockPage] = useState(1);
   const [usagePage, setUsagePage] = useState(1);
   const [showManage, setShowManage] = useState(false);
@@ -116,6 +121,7 @@ export default function InventoryView() {
   const [usageForm, setUsageForm] = useState<UsageFormState>(emptyUsageForm);
   const [savingItem, setSavingItem] = useState(false);
   const [savingUsage, setSavingUsage] = useState(false);
+  const [lowStockThreshold, setLowStockThreshold] = useState(10);
   const [newCategory, setNewCategory] = useState("");
   const [newTypeName, setNewTypeName] = useState("");
   const [typeCategory, setTypeCategory] = useState("");
@@ -132,16 +138,18 @@ export default function InventoryView() {
     setLoading(true);
     setError(null);
     try {
-      const [cats, typs, inv, usage] = await Promise.all([
+      const [cats, typs, inv, usage, smsConfig] = await Promise.all([
         getInventoryCategories(),
         getInventoryTypes(),
         getInventoryItems(),
         getInventoryUsageHistory(),
+        getSmsConfig(),
       ]);
       setCategories(cats);
       setTypes(typs);
       setItems(inv);
       setUsageHistory(usage);
+      setLowStockThreshold(Math.max(1, Number(smsConfig.lowStockThreshold || 10)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load inventory data");
     } finally {
@@ -184,31 +192,61 @@ export default function InventoryView() {
   const filteredStock = useMemo(() => {
     const query = stockSearch.toLowerCase();
     return items.filter((item) => {
+      const matchesCategory = stockCategoryFilter === "all" || item.category === stockCategoryFilter;
+      const matchesType = stockTypeFilter === "all" || item.type === stockTypeFilter;
+      if (!matchesCategory || !matchesType) return false;
       if (!query) return true;
       return [item.category, item.type, item.imei_number].some((value) => value.toLowerCase().includes(query));
     });
-  }, [items, stockSearch]);
+  }, [items, stockCategoryFilter, stockSearch, stockTypeFilter]);
 
   const filteredUsage = useMemo(() => {
     const query = usageSearch.toLowerCase();
     return usageHistory.filter((item) => {
+      const matchesCategory = usageCategoryFilter === "all" || item.category === usageCategoryFilter;
+      const matchesType = usageTypeFilter === "all" || item.type === usageTypeFilter;
+      if (!matchesCategory || !matchesType) return false;
       if (!query) return true;
       return [item.category, item.type, item.imei_number, item.installed_by, item.client_name, item.vehicle_number, item.location].some((value) => value.toLowerCase().includes(query));
     });
-  }, [usageHistory, usageSearch]);
+  }, [usageCategoryFilter, usageHistory, usageSearch, usageTypeFilter]);
 
   const itemTypes = useMemo(() => {
     if (!itemForm.category) return [];
     return types.filter((type) => type.category_name === itemForm.category);
   }, [itemForm.category, types]);
 
+  const stockFilterTypes = useMemo(() => {
+    if (stockCategoryFilter === "all") return types;
+    return types.filter((type) => type.category_name === stockCategoryFilter);
+  }, [stockCategoryFilter, types]);
+
+  const usageFilterTypes = useMemo(() => {
+    if (usageCategoryFilter === "all") return types;
+    return types.filter((type) => type.category_name === usageCategoryFilter);
+  }, [types, usageCategoryFilter]);
+
   const typeCards = useMemo(() => {
     return types.map((type) => ({
       ...type,
-      count: items.filter((item) => item.type === type.name).length,
+      count: items.filter((item) => item.category === type.category_name && item.type === type.name).length,
       style: getCategoryStyle(type.category_name),
     }));
   }, [items, types]);
+
+  const lowStockTypes = useMemo(() => {
+    return typeCards
+      .filter((type) => type.count <= lowStockThreshold)
+      .sort((a, b) => a.count - b.count);
+  }, [lowStockThreshold, typeCards]);
+
+  useEffect(() => {
+    setStockPage(1);
+  }, [stockSearch, stockCategoryFilter, stockTypeFilter]);
+
+  useEffect(() => {
+    setUsagePage(1);
+  }, [usageSearch, usageCategoryFilter, usageTypeFilter]);
 
   const handleCreateCategory = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -542,19 +580,34 @@ export default function InventoryView() {
 
         {typeCards.map((type) => {
           const Icon = type.style.icon;
+          const isLowStock = type.count <= lowStockThreshold;
           return (
-            <div key={type.id} className="bg-card border border-border rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 min-w-35">
+            <div key={type.id} className={cn("bg-card border rounded-xl px-4 py-3 shadow-sm flex items-center gap-3 min-w-35", isLowStock ? "border-amber-300 bg-amber-50/60" : "border-border")}>
               <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", type.style.bg, type.style.text)}>
                 <Icon size={16} />
               </div>
               <div>
                 <p className="text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground truncate max-w-25">{type.name}</p>
                 <p className="text-lg font-extrabold text-foreground leading-tight">{type.count}</p>
+                {isLowStock ? <p className="text-[0.65rem] font-semibold text-amber-700">Low stock</p> : null}
               </div>
             </div>
           );
         })}
       </div>
+
+      {lowStockTypes.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlertCircle size={16} />
+            <span>Low stock warning</span>
+          </div>
+          <p className="mt-1 text-amber-800">
+            {lowStockTypes.map((type) => `${type.name} (${type.count} left)`).join(", ")}
+            . Admin SMS is sent when a type reaches {lowStockThreshold} or below.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center bg-muted/50 p-1 rounded-xl border border-border text-sm">
@@ -562,7 +615,58 @@ export default function InventoryView() {
           <button onClick={() => setActiveTab("usage")} className={cn("px-5 py-1.5 rounded-lg font-medium transition-colors", activeTab === "usage" ? "bg-odg-orange text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}>Usage History</button>
         </div>
 
-        <div className="relative w-full sm:w-72">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+          {activeTab === "stock" && (
+            <>
+              <select
+                value={stockCategoryFilter}
+                onChange={(event) => {
+                  setStockCategoryFilter(event.target.value);
+                  setStockTypeFilter("all");
+                }}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm sm:w-44"
+              >
+                <option value="all">All categories</option>
+                {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
+              </select>
+
+              <select
+                value={stockTypeFilter}
+                onChange={(event) => setStockTypeFilter(event.target.value)}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm sm:w-44"
+              >
+                <option value="all">All types</option>
+                {stockFilterTypes.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
+              </select>
+            </>
+          )}
+
+          {activeTab === "usage" && (
+            <>
+              <select
+                value={usageCategoryFilter}
+                onChange={(event) => {
+                  setUsageCategoryFilter(event.target.value);
+                  setUsageTypeFilter("all");
+                }}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm sm:w-44"
+              >
+                <option value="all">All categories</option>
+                {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
+              </select>
+
+              <select
+                value={usageTypeFilter}
+                onChange={(event) => setUsageTypeFilter(event.target.value)}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm sm:w-44"
+              >
+                <option value="all">All types</option>
+                {usageFilterTypes.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
+              </select>
+            </>
+          )}
+
+          <div className="relative w-full sm:w-72">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             value={activeTab === "stock" ? stockSearch : usageSearch}
@@ -570,6 +674,7 @@ export default function InventoryView() {
             placeholder="Search by IMEI, type or category"
             className="w-full pl-9 pr-4 h-9 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
+        </div>
         </div>
       </div>
 
